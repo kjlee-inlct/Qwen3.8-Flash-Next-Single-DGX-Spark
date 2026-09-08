@@ -213,10 +213,22 @@ if [[ "$FULL" != true ]]; then
     exit 0
 fi
 
+[[ "$(uname -m)" == "aarch64" ]] || die "Full mode requires the DGX Spark aarch64 host"
+mem_total_kib="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+(( mem_total_kib >= 120 * 1048576 )) || die "Full mode requires at least 120 GiB unified memory"
+gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n 1)"
+[[ "$gpu_name" == *GB10* ]] || die "Expected an NVIDIA GB10 GPU, found: $gpu_name"
+sudo docker info >/dev/null
+
 echo
 echo "===== PINNED ASSET BOOTSTRAP ====="
-sudo docker pull "$IMAGE"
 sudo install -d -m 0755 "$STATE_DIR/huggingface"
+snapshot_path="$STATE_DIR/huggingface/hub/models--Mia-AiLab--Qwen3.8-Flash-Next-NVFP4/snapshots/$MODEL_REVISION"
+available_kib="$(df -Pk "$STATE_DIR" | awk 'NR==2 {print $4}')"
+if [[ ! -f "$snapshot_path/model.safetensors.index.json" && "$available_kib" -lt $((150 * 1048576)) ]]; then
+    die "Pinned model is absent and the state filesystem has less than 150 GiB free"
+fi
+sudo docker pull "$IMAGE"
 sudo docker run --rm --pull=never \
     -e HF_HOME=/hf \
     -e HF_ENDPOINT=https://huggingface.co \
