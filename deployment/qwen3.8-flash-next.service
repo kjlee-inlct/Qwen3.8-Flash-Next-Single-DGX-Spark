@@ -1,0 +1,25 @@
+[Unit]
+Description=Hardened Qwen3.8 Flash Next production service for one DGX Spark
+Documentation=https://github.com/anubhavmalhotra/Qwen3.8-Flash-Next-Single-DGX-Spark
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target
+StartLimitIntervalSec=3600
+StartLimitBurst=2
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/qwen3.8-flash-next/current
+Environment=HOME=/var/lib/qwen3.8-flash-next
+Environment=HF_HOME=/var/lib/qwen3.8-flash-next/huggingface
+ExecStart=/bin/bash /opt/qwen3.8-flash-next/current/deployment/service-runner.sh
+ExecStop=/bin/bash /opt/qwen3.8-flash-next/current/stop.sh
+Restart=on-failure
+RestartSec=60
+TimeoutStartSec=infinity
+TimeoutStopSec=180
+KillSignal=SIGTERM
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

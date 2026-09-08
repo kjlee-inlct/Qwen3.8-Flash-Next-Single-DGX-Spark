@@ -65,7 +65,11 @@ def main() -> None:
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
-    tok = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    tok = AutoTokenizer.from_pretrained(
+        args.model,
+        trust_remote_code=False,
+        local_files_only=True,
+    )
     vocab_size = len(tok)
 
     counts: Counter[int] = Counter()
