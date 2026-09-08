@@ -24,6 +24,7 @@
 !/download.sh
 !/start.sh
 !/stop.sh
+!/clone-install-test.sh
 !/PRODUCTION-NOTES.md
 !/COMMUNITY-INTEGRATION.md
 !/source-manifest.sha256
