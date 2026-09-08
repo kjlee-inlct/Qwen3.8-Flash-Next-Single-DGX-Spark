@@ -1,0 +1,228 @@
+# Pinned, loopback-only systemd deployment
+
+This optional deployment layer packages the measured profile as an immutable
+release with memory admission checks, readiness checks, bounded restart attempts,
+and rollback. It is independent of any particular laptop, user account, reverse
+proxy, or VPN. The optimized production profile has been exercised on one DGX
+Spark; this generalized public installer has syntax/helper tests, **not a fresh
+machine end-to-end installation test**.
+
+## Before running privileged code
+
+- Use a single 128 GB DGX Spark running a supported NVIDIA DGX OS. Docker with
+  the NVIDIA Container Toolkit/GPU runtime, `nvidia-smi`, systemd, Bash, Python 3,
+  `curl`, `iproute2` (`ss`), GNU coreutils, and `sha256sum` must already work.
+  Install those prerequisites through NVIDIA's official DGX documentation and
+  your OS package sources. These scripts do not install Docker or drivers.
+- Allow at least 150 GiB for the model snapshot, packed PLE table, image/cache
+  growth, plus the Docker image's actual size and ordinary OS free space.
+  Image layers and temporary build files can require substantial additional
+  space. Check both the model-state and Docker filesystems before downloading.
+- Review this repository and its pinned image/model provenance first. A digest
+  pins bytes; it is not a malware scan, vendor endorsement, or cryptographic
+  signature from this fork. The checksum manifest protects against accidental
+  payload drift; it does not make an untrusted checkout safe to execute as root.
+- Do not let another process edit the checkout while installation is running.
+  Runtime `.env` is sourced as shell code and must remain root-owned and trusted.
+  Do not put tokens in this public checkout or publish local model output/corpora.
+- Stop other GPU-serving processes yourself. The installer will refuse to
+  interrupt active or queued requests on port 8888. Drain incoming traffic at
+  your proxy before cutover: the idle probe is a point-in-time check, not an
+  atomic admission lock.
+- An existing service with the same unit name but no managed `current` release
+  is not silently replaced. Back up and explicitly migrate that installation
+  first. Failed first-install files/units are retained for diagnosis and likewise
+  require an explicit reviewed recovery step before retrying.
+
+The model is the **third-party MiaAI NVFP4 quantization hosted on Hugging Face**,
+not an official Qwen-authored quantization. This profile keeps the stock checkpoint;
+it does not download or enable the optional abliterated variant.
+
+## 1. Explicitly bootstrap the pinned image and HF snapshot
+
+Run from the reviewed repository root. These are the only download steps here:
+the image comes from its Docker registry, and model files come from Hugging Face
+and its official storage/CDN infrastructure. No alternate model mirrors are used.
+
+```bash
+sudo docker pull vllm/vllm-openai:qwen38-flash-next@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8
+sudo install -d -m 0755 /var/lib/qwen3.8-flash-next/huggingface
+sudo docker run --rm --pull=never \
+  -e HF_HOME=/hf -e HF_ENDPOINT=https://huggingface.co \
+  -e HF_HUB_DISABLE_TELEMETRY=1 -e DO_NOT_TRACK=1 \
+  -v /var/lib/qwen3.8-flash-next/huggingface:/hf \
+  --entrypoint python3 \
+  vllm/vllm-openai:qwen38-flash-next@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8 \
+  -c 'from huggingface_hub import snapshot_download; snapshot_download(repo_id="Mia-AiLab/Qwen3.8-Flash-Next-NVFP4", revision="925d7be6c14c6c9442ef83e8f05b5a3c39304f69", cache_dir="/hf/hub")'
+```
+
+This stock snapshot does not need the abliterated model's gated access. Do not
+accept another model's access or contact-sharing terms as part of this procedure.
+The bootstrap above is resumable. The installer checks pinned config/index
+hashes; the runtime checks all shards named by the index are present. Those are
+not a separate hash audit of every model weight shard.
+
+## 2. Choose a draft-vocabulary mode
+
+First review the system-wide VM profile in
+[`files/sysctl-spark3.conf`](../files/sysctl-spark3.conf). The shipped 4 GiB
+watchdog floors are qualified only with the exact settings below; both the
+installer and each systemd startup refuse mismatches. These are explicit opt-in
+operator commands, not automatic installer changes:
+
+```bash
+sysctl vm.min_free_kbytes vm.watermark_scale_factor vm.swappiness
+sudo sysctl -p files/sysctl-spark3.conf
+sudo install -b -m 0644 files/sysctl-spark3.conf /etc/sysctl.d/90-qwen38-qualified-profile.conf
+```
+
+The first `sudo` command applies the reviewed values immediately; the second
+persists them and backs up an existing destination using GNU `install -b`.
+Resolve any conflicting sysctl files and verify values again after reboot.
+Expected values are `4194304`, `300`, and `30`, respectively. These settings
+affect the entire machine and memory accounting, not only this container.
+
+The measured profile uses a locally built reduced draft vocabulary, retaining
+55,124 token IDs in the evaluated corpus. No private corpus or vocabulary is
+included in this fork. The requested maximum is 65,536, not a guaranteed output
+count: the builder retains observed tokens plus all added/special tokens.
+
+**Representative local corpus (recommended for reproducing the optimization):**
+prepare a directory outside this repository containing:
+
+- `local_code.txt`: code/text you are authorized to process locally.
+- `model_outputs.jsonl`: one JSON object per line, with a `text` field containing
+  representative model-generated coding answers. Do not use only prompts: MTP
+  predicts the model's outputs. The builder weights this file 20 times.
+
+For example, use an editor to put a harmless representative code excerpt in
+`local_code.txt` and write actual, locally collected output records in this form:
+
+```json
+{"text":"def add(a, b):\n    return a + b\n"}
+```
+
+That single illustrative record is **not** an adequate performance corpus. Use
+diverse representative languages, formatting, tool arguments, and task outputs.
+The installer builds with the pinned local tokenizer in a network-disabled
+container. Corpus and HF model mounts are read-only; only the vocabulary output
+directory is writable. It validates unique/ranged IDs and retention of tokenizer
+added/special tokens. Coverage and draft acceptance should be remeasured on your
+workload; the private evaluation corpus is deliberately not published.
+
+```bash
+sudo env QWEN_CORPUS_DIR=/absolute/path/to/your/local-corpus \
+  /bin/bash deployment/install-root.sh
+```
+
+The default corpus directory is `/var/lib/qwen3.8-flash-next/corpus`. Files are
+read locally only; the installer never searches your home directory.
+
+**Existing vocabulary:** supply an ordinary token-ID file from the pinned
+tokenizer. It is validated and copied into the generic state directory, not into
+the Git checkout. Existing vocabulary files are not overwritten.
+
+```bash
+sudo env QWEN_DRAFT_VOCAB=/absolute/path/to/draft-vocabulary.txt \
+  /bin/bash deployment/install-root.sh
+```
+
+**Bootstrap without a corpus:** use the full draft vocabulary. This remains MTP3,
+but disables the reduced-vocabulary optimization, so the measured throughput
+table does **not** apply directly.
+
+```bash
+sudo env QWEN_DRAFT_VOCAB=off /bin/bash deployment/install-root.sh
+```
+
+The first model launch can take 10–30 minutes, especially when building the PLE
+table and warming the GPU. Installer readiness allows approximately 30 minutes.
+
+## Installed layout and memory policy
+
+| Item | Location / behavior |
+| --- | --- |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/78b0675-community-v1` |
+| Active link | `/opt/qwen3.8-flash-next/current` |
+| Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
+| Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
+| Root-only rollback backup | `/var/backups/qwen3.8-flash-next/<timestamp>-<release>-<pid>` |
+| API | `http://127.0.0.1:8888/v1` |
+| Model ID | `qwen3.8-flash-next` |
+| Context / active scheduler slots | 262,144 tokens / 8 short requests |
+| Host reserve / container cap | 36 GiB / 90 GiB |
+| Launch admission | At least 94 GiB `MemAvailable` |
+| Automatic restart policy | Initial start plus at most one retry per hour; 60-second delay |
+
+The 8 scheduler slots do **not** mean eight simultaneous full-context requests
+fit. The measured KV pool was 5.41 GiB / 360,264 tokens; actual pool size can vary
+with host/runtime memory accounting. Long prefill also competes with decoding.
+Keep the watchdog thresholds; do not lower them to force an unstable launch.
+The measured host used a persistent 4 GiB kernel reserve, watermark scale 300,
+and swappiness 30. This installer refuses mismatching kernel sysctls rather than
+silently changing them; explicitly review/apply the host profile above and
+requalify your machine. `MemAvailable` is not directly comparable across differing
+kernel reserve policies.
+
+Only manifest-listed ordinary files are installed. `.git`, private `.env` files,
+unlisted logs, credentials, and corpora are not copied. A checked-in `.env.sample`
+creates the runtime `.env`; existing immutable releases preserve their own copy.
+Change release IDs and regenerate the manifest after audited source/config
+changes instead of mutating an existing release in place. The generated runtime
+`.env` is intentionally outside the source checksum manifest.
+
+## Readiness, access, and rollback
+
+```bash
+systemctl status qwen3.8-flash-next.service
+journalctl -u qwen3.8-flash-next.service -n 80 --no-pager
+curl --fail http://127.0.0.1:8888/health
+curl --fail http://127.0.0.1:8888/v1/models
+```
+
+No gateway/VPN installation or credentials are assumed. For another computer,
+use an SSH tunnel or separately configure an authenticated HTTPS reverse proxy
+over a private network. Keep the model server bound to loopback; do not expose
+this unauthenticated HTTP backend directly to the LAN or internet. An
+OpenAI-compatible client that expects the complete route uses your separately configured
+proxy's `/v1/chat/completions` URL and the model ID above. Test that unauthorized
+requests fail and streaming/tool calls work through that proxy independently.
+
+Failed upgrades restore and start the previous managed release. A failed first
+installation has no prior release: the candidate is stopped and disabled, its
+current link removed, and files retained for diagnosis. For an explicit rollback
+after a successful upgrade, first drain requests and run:
+
+```bash
+sudo /bin/bash /opt/qwen3.8-flash-next/current/deployment/rollback-root.sh
+```
+
+Rollback requires a previous managed release and starts it; check readiness
+afterward. Historical files are retained rather than deleting models/releases.
+
+## Optional OS maintenance
+
+`install-root.sh` does not update the OS. During a planned outage, review
+`sudo apt-get -s dist-upgrade`, drain traffic, and then explicitly run:
+
+```bash
+sudo /bin/bash deployment/full-maintenance-root.sh
+```
+
+This wrapper requires an existing service, stops inference before package work,
+updates APT/snap, refreshes available firmware metadata, and invokes the installer.
+It does not force phased updates, autoremove old kernels, install firmware, or
+reboot. On failure it attempts to restart the current service. The standalone
+`maintenance-root.sh` must not be run alongside a memory-heavy model. Review
+APT's proposed package changes before accepting a maintenance outage.
+
+## Local validation
+
+```bash
+python3 -m unittest discover -s deployment/tests -v
+python3 -m unittest discover -s bench -p 'test_*.py' -v
+python3 deployment/manifest_release.py verify . .
+```
+
+These cover manifest isolation/path validation and vocabulary validation, not
+the host driver, Docker runtime, full privileged installer, or production load.

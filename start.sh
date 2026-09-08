@@ -110,7 +110,8 @@ _ENV_SNAPSHOT_VARS=(KV_TARGET_GIB HOST_RESERVE_GIB HOST_SLACK_GIB OS_RESERVE_GIB
                     MEMWATCH_MIN_GIB MEMWATCH_MIN_FREE_GIB MEMWATCH_FREE_GATE_GIB MEMWATCH_GRACE
                     OVERHEAD_GIB PLE_GIB CONTAINER_MEM_GIB KV_CACHE_MEMORY
                     MAMBA_SSM_CACHE_DTYPE
-                    IMAGE SERVED_MODEL_NAME CUDAGRAPH_MODE HF_TOKEN
+                    IMAGE SERVED_MODEL_NAME MODEL_REVISION BIND_HOST ALLOW_IMAGE_PULL HF_HOME TP1_MODEL_ID
+                    CUDAGRAPH_MODE HF_TOKEN
                     CUDAGRAPH_CAPTURE_SIZES COMPILATION_MODE MTP_K_SCHEDULE
                     MTP_DRAFT_VOCAB
                     EXTRA_VLLM_ARGS EXTRA_DOCKER_ARGS NATIVE_MAX_MODEL_LEN
@@ -151,6 +152,9 @@ else
     MODEL_ID="$STOCK_MODEL_ID"
 fi
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-qwen3.8-flash-next}"
+BIND_HOST="${BIND_HOST:-127.0.0.1}"
+MODEL_REVISION="${MODEL_REVISION:-}"
+ALLOW_IMAGE_PULL="${ALLOW_IMAGE_PULL:-0}"
 PORT="${_CLI_PORT:-${PORT:-8888}}"            # 8888 is safe only while comfy-h3.service is disabled (it watches this port)
 IMAGE="${IMAGE:?IMAGE not set in .env}"
 
@@ -369,7 +373,21 @@ PY
 }
 SNAP=""
 SNAP_RC=0
-SNAP="$(resolve_snapshot "$MODEL_PATH")" && SNAP_RC=0 || SNAP_RC=$?
+if [[ -n "$MODEL_REVISION" ]]; then
+    SNAP="$MODEL_REVISION"
+    python3 - "$MODEL_PATH/snapshots/$SNAP" <<'PY' && SNAP_RC=0 || SNAP_RC=$?
+import json, pathlib, sys
+snapshot = pathlib.Path(sys.argv[1])
+index = snapshot / "model.safetensors.index.json"
+if not index.is_file():
+    raise SystemExit(1)
+weight_map = json.loads(index.read_text()).get("weight_map", {})
+raise SystemExit(0 if weight_map and all((snapshot / name).is_file()
+                                         for name in set(weight_map.values())) else 1)
+PY
+else
+    SNAP="$(resolve_snapshot "$MODEL_PATH")" && SNAP_RC=0 || SNAP_RC=$?
+fi
 [[ -n "$SNAP" ]] || err "No snapshot under $MODEL_PATH/snapshots"
 SNAPSHOT_REL="snapshots/$SNAP"
 [[ -f "$MODEL_PATH/$SNAPSHOT_REL/config.json" ]] || err "No snapshot under $MODEL_PATH/snapshots"
@@ -542,14 +560,16 @@ MTP_PKG="$VLLM_PKG/models/qwen3_8_flash_next/nvidia/mtp.py"
 
 info "=== Step 4: Prepare patches ==="
 if ! docker image inspect "$IMAGE" &>/dev/null; then
-    info "Pulling $IMAGE ..."
+    [[ "$ALLOW_IMAGE_PULL" == "1" ]] || err "Pinned runtime image is not present locally: $IMAGE
+       No network pull was attempted. Audit the image source, then set ALLOW_IMAGE_PULL=1 once."
+    info "Pulling explicitly approved image $IMAGE ..."
     docker pull "$IMAGE"
 fi
 
 extract() {  # <path-in-image> <dest>
     if [[ ! -f "$2" ]]; then
         info "Extracting $(basename "$1") from image..."
-        local tmp; tmp=$(docker create "$IMAGE" /bin/true)
+        local tmp; tmp=$(docker create --pull=never "$IMAGE" /bin/true)
         docker cp "$tmp:$1" "$2"
         docker rm "$tmp" >/dev/null 2>&1
     fi
@@ -613,7 +633,7 @@ PLE_CACHE_CTR="/root/.cache/vllm/ple_cache/${PLE_ORG}--${PLE_NAME}"
 if ! ls "$PLE_CACHE_HOST"/*.packed_u8 >/dev/null 2>&1; then
     info "Building packed PLE table (one-time, ~40 s, <1 GiB RAM, no GPU)..."
     mkdir -p "$PLE_CACHE_HOST"
-    docker run --rm --name "${CONTAINER_NAME}-plebuild" --memory 6g --cpus 8 \
+    docker run --pull=never --rm --network none --name "${CONTAINER_NAME}-plebuild" --memory 6g --cpus 8 \
         -v "$MODEL_PATH:/m:ro" -v "$HOME/.cache/vllm/ple_cache:/out" \
         -v "$SCRIPT_DIR/files/build_ple_packed_table.py:/b.py:ro" \
         --entrypoint python3 "$IMAGE" -u /b.py "/m/$SNAPSHOT_REL" "/out/${PLE_ORG}--${PLE_NAME}"
@@ -701,6 +721,8 @@ VLLM_ARGS_STR="${VLLM_ARGS[*]}"
 info ""
 info "Config (single Spark, TP=1):"
 info "  Model:      $MODEL_ID"
+info "  Revision:   ${MODEL_REVISION:-$SNAP}"
+info "  Runtime:    /root/.cache/huggingface/hub/models--${ORG}--${NAME}/$SNAPSHOT_REL"
 info "  Ablit:      $ABLIT$( [[ "$ABLIT" == "1" ]] && echo ' (gated Keys o_proj L15-47)' )"
 info "  Image:      $IMAGE"
 if [[ -n "$YARN_FACTOR" ]]; then
@@ -715,25 +737,28 @@ info "  MTP:        $MTP_NUM_SPECULATIVE_TOKENS $( [[ "$MTP_NUM_SPECULATIVE_TOKE
 info "  Draft vocab: ${MTP_DRAFT_VOCAB:-full (248320)}"
 info "  Graphs:     $CUDAGRAPH_MODE  capture=${_CG_SIZES:-vllm-default}  compile-mode=$COMPILATION_MODE"
 info "  Port:       $PORT"
+info "  Bind:       $BIND_HOST"
 info ""
 
 LAUNCH_SCRIPT=$(mktemp /tmp/vllm_tp1_XXXXXX.sh)
 cat > "$LAUNCH_SCRIPT" <<LAUNCH_EOF
 #!/bin/bash
-docker run \\
+docker run --pull=never \\
     -d --name $CONTAINER_NAME \\
     --gpus all --network host --ipc host \\
     --cap-add SYS_NICE --cap-add SYS_PTRACE --ulimit memlock=-1 --ulimit stack=67108864 \\
     --memory ${CONTAINER_MEM_GIB}g --memory-swap ${CONTAINER_MEM_GIB}g \\
     -e HF_HUB_OFFLINE=1 \\
     -e TRANSFORMERS_OFFLINE=1 \\
+    -e HF_HUB_DISABLE_TELEMETRY=1 \\
+    -e HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \\
+    -e DO_NOT_TRACK=1 \\
     -e VLLM_PLE_CPU_OFFLOAD=1 \\
     -e VLLM_PLE_PACKED_TABLE_DIR=$PLE_CACHE_CTR \\
     -e VLLM_PLE_OFFLOAD_STEP_TIMEOUT=300 \\
     ${MTP_DRAFT_VOCAB:+-v $MTP_DRAFT_VOCAB:/root/draft_vocab.txt:ro} \\
     ${MTP_DRAFT_VOCAB:+-e VLLM_MTP_DRAFT_VOCAB=/root/draft_vocab.txt} \\
     -e HF_HOME=/root/.cache/huggingface \\
-    ${HF_TOKEN:+-e HF_TOKEN=$HF_TOKEN} \\
     -v $PATCHED_PLE:$PLE_PKG:ro \\
     -v $PATCHED_MODELOPT:$MODELOPT_PKG:ro \\
     -v $PATCHED_QSA_OPS:$QSA_OPS_PKG:ro \\
@@ -747,9 +772,9 @@ docker run \\
     -v $HOME/.cache/vllm:/root/.cache/vllm \\
     $EXTRA_DOCKER_ARGS \\
     $IMAGE \\
-    $MODEL_ID \\
+    /root/.cache/huggingface/hub/models--${ORG}--${NAME}/$SNAPSHOT_REL \\
     $VLLM_ARGS_STR \\
-    --host 0.0.0.0 \\
+    --host $BIND_HOST \\
     --port $PORT
 LAUNCH_EOF
 chmod +x "$LAUNCH_SCRIPT"

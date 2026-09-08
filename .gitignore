@@ -24,6 +24,9 @@
 !/download.sh
 !/start.sh
 !/stop.sh
+!/PRODUCTION-NOTES.md
+!/COMMUNITY-INTEGRATION.md
+!/source-manifest.sha256
 
 # --- launcher support and patch generators -----------------------------
 !/files/memwatch.sh
@@ -45,12 +48,23 @@
 # which is what makes ms/step and tokens/step comparable across launches.
 !/bench/sweep.py
 !/bench/mixed.py
+!/bench/qualification_load.py
+!/bench/test_qualification_load.py
+!/bench/results/2026-09-07-profile.json
+
+# --- generic production deployment (no local credentials/configuration) --
+!/deployment/*.sh
+!/deployment/*.py
+!/deployment/*.service
+!/deployment/README.md
+!/deployment/tests/*.py
 
 # --- measurement write-ups ---------------------------------------------
 # Host-specific, but they carry the numbers the README and CHANGELOG cite.
 !/docs/synthesis-astra-fable-2026-09-05.md
 !/docs/overnight-2026-09-05.md
 !/docs/goal-overnight-2026-09-05.md
+!/docs/measured-profile-2026-09-07.md
 
 # Deliberately NOT tracked:
 #   bench/*                   the rest of the local benchmark scripts

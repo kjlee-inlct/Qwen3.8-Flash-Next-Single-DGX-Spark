@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "measurement_date": "2026-09-07",
+  "scope": "One DGX Spark; standard Mia NVFP4 checkpoint; small bounded qualification, not a sustained-load guarantee",
+  "model": {
+    "hf_repo": "Mia-AiLab/Qwen3.8-Flash-Next-NVFP4",
+    "revision": "925d7be6c14c6c9442ef83e8f05b5a3c39304f69",
+    "abliterated": false
+  },
+  "profile": {
+    "native_context": 262144,
+    "max_active_short_requests": 8,
+    "kv_dtype": "fp8",
+    "recurrent_state_dtype": "bfloat16",
+    "mtp_depth": 3,
+    "draft_vocabulary_unique_ids": 55124,
+    "draft_corpus_distributed": false,
+    "host_reserve_gib": 36,
+    "container_mem_gib": 90,
+    "startup_min_available_gib": 94,
+    "kv_pool_gib": 5.41,
+    "kv_pool_tokens": 360264
+  },
+  "workload": {
+    "prompt_source": "bench/qualification_load.py:PROMPT",
+    "temperature": 0.2,
+    "thinking": false,
+    "max_output_tokens": 384,
+    "trials_per_concurrency": 1,
+    "prefix_cache": "warm/repeated prompt",
+    "rate_definition": "total API completion tokens / batch wall seconds, including prefill and queueing",
+    "per_stream_definition": "aggregate / number of simultaneous requests; not average individual decode speed"
+  },
+  "baseline": [
+    {
+      "concurrency": 1,
+      "aggregate_tokens_s": 27.57,
+      "median_ttft_s": 0.516,
+      "min_mem_available_gib": 7.57
+    },
+    {
+      "concurrency": 2,
+      "aggregate_tokens_s": 40.57,
+      "median_ttft_s": 0.539,
+      "min_mem_available_gib": 7.41
+    },
+    {
+      "concurrency": 4,
+      "aggregate_tokens_s": 70.78,
+      "median_ttft_s": 1.139,
+      "min_mem_available_gib": 7.32
+    },
+    {
+      "concurrency": 8,
+      "aggregate_tokens_s": 73.66,
+      "median_ttft_s": 10.373,
+      "min_mem_available_gib": 7.31
+    }
+  ],
+  "current": [
+    {
+      "concurrency": 1,
+      "ok": 1,
+      "requests": 1,
+      "wall_s": 12.92,
+      "total_completion_tokens": 384,
+      "aggregate_tokens_s": 29.72,
+      "per_stream_tokens_s": 29.72,
+      "median_ttft_s": 0.309,
+      "min_mem_available_gib": 9.32
+    },
+    {
+      "concurrency": 2,
+      "ok": 2,
+      "requests": 2,
+      "wall_s": 15.225,
+      "total_completion_tokens": 768,
+      "aggregate_tokens_s": 50.44,
+      "per_stream_tokens_s": 25.22,
+      "median_ttft_s": 0.389,
+      "min_mem_available_gib": 9.33
+    },
+    {
+      "concurrency": 4,
+      "ok": 4,
+      "requests": 4,
+      "wall_s": 19.972,
+      "total_completion_tokens": 1536,
+      "aggregate_tokens_s": 76.91,
+      "per_stream_tokens_s": 19.23,
+      "median_ttft_s": 1.132,
+      "min_mem_available_gib": 9.27
+    },
+    {
+      "concurrency": 8,
+      "ok": 8,
+      "requests": 8,
+      "wall_s": 24.073,
+      "total_completion_tokens": 3072,
+      "aggregate_tokens_s": 127.61,
+      "per_stream_tokens_s": 15.95,
+      "median_ttft_s": 0.651,
+      "min_mem_available_gib": 9.27
+    }
+  ],
+  "burst_16": {
+    "concurrency": 16,
+    "ok": 16,
+    "requests": 16,
+    "wall_s": 47.816,
+    "total_completion_tokens": 6144,
+    "aggregate_tokens_s": 128.49,
+    "per_stream_tokens_s": 8.03,
+    "median_ttft_s": 11.953,
+    "min_mem_available_gib": 9.3,
+    "observed_running": 8,
+    "observed_waiting": 8
+  },
+  "coding": {
+    "tasks": 20,
+    "functional_passes": 19,
+    "strict_passes": 18,
+    "previous_qwen_functional": 19,
+    "previous_qwen_strict": 19,
+    "historical_mia_deepseek_functional": 19,
+    "historical_mia_deepseek_strict": 12,
+    "comparison_caveat": "Historical saved answers, not a fresh DeepSeek run; no SWE-bench claim"
+  },
+  "vision": {
+    "tasks": 4,
+    "unconstrained_correct": 4,
+    "unconstrained_pure_json": 0,
+    "structured_schema_correct_and_valid": 4
+  },
+  "tools": {
+    "nonstream_repeated_same_schema": 5,
+    "nonstream_passed": 5,
+    "streaming_mock_roundtrip_pass": true,
+    "real_tools_executed": 0
+  },
+  "context_retrieval": [
+    {
+      "prompt_tokens": 32740,
+      "completion_tokens": 110,
+      "request_elapsed_seconds": 19.027,
+      "needles_correct": 3,
+      "strict_json_pass": true,
+      "token_counts_match": true
+    },
+    {
+      "prompt_tokens": 131072,
+      "completion_tokens": 97,
+      "request_elapsed_seconds": 72.73,
+      "needles_correct": 3,
+      "strict_json_pass": true,
+      "token_counts_match": true
+    },
+    {
+      "prompt_tokens": 249990,
+      "completion_tokens": 108,
+      "request_elapsed_seconds": 148.845,
+      "needles_correct": 3,
+      "strict_json_pass": true,
+      "token_counts_match": true
+    }
+  ],
+  "stability": {
+    "backend_restarts_during_qualification": 0,
+    "matching_nvidia_or_oom_kernel_errors": 0,
+    "duration_claim": "Short qualification only; no overnight stability claim"
+  },
+  "privacy": "Only aggregate numeric results and public software identifiers. No endpoints, hardware serials, private paths, credentials, user prompts, generated code, corpora or generated vocabulary."
+}

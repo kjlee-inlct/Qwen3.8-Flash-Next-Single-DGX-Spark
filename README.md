@@ -1,3 +1,84 @@
+# Qwen3.8 Flash Next: single-Spark production profile
+
+A production-focused fork of [MiaAI-Lab's single-DGX-Spark recipe](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark), based on upstream revision `78b0675e4469a19befaa9c84a41662b671d4185e`.
+
+This fork combines MiaAI's inference optimizations with pinned assets, an eight-slot short-request profile, conservative memory budgeting, offline startup, and bounded systemd recovery. **The model, quantization, inference patches and underlying kernel work are upstream contributions.** Our contribution is the production integration, host-specific tuning and qualification documented here—not a new model or a new kernel.
+
+The measured configuration uses the standard `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4` checkpoint, **not** the optional abliterated model. This is a third-party quantization hosted on Hugging Face, not official Qwen-distributed weights.
+
+- [Deployment guide](deployment/README.md): review, stage, install and roll back.
+- [Production changes and tradeoffs](PRODUCTION-NOTES.md).
+- [Full measured profile and methodology](docs/measured-profile-2026-09-07.md).
+- [Community fork integration review](COMMUNITY-INTEGRATION.md): adopted and deferred commits with rationale.
+- [Upstream historical documentation](#upstream-historical-reference): retained below with its original credits and licensing.
+
+## Measured profile — this fork, 2026-09-07
+
+One DGX Spark / GB10, approximately 121.7 GiB unified memory. Native 262,144-token context, YaRN off, MTP 3, FP8 KV, BF16 recurrent state, eight active slots, 2,048-token prefill chunks and decode graphs for every MTP verify width from 4 through 32. The locally fitted draft vocabulary contained 55,124 token IDs.
+
+**Warm, short technical/coding-explanation prompts; 384 output tokens per request; thinking explicitly off; one trial per concurrency.** All 15 requests completed. These are end-to-end aggregate rates, not pure decode rates, and this is not the upstream 600-token prose / three-repeat benchmark.
+
+| Streams | Previous aggregate tok/s | Tuned aggregate tok/s | Tuned per-stream share tok/s | Aggregate change | Previous median TTFT | Tuned median TTFT |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 27.57 | 29.72 | 29.72 | +7.8% | 0.516 s | 0.309 s |
+| 2 | 40.57 | 50.44 | 25.22 | +24.3% | 0.539 s | 0.389 s |
+| 4 | 70.78 | 76.91 | 19.23 | +8.7% | 1.139 s | 1.132 s |
+| 8 | 73.66 | **127.61** | 15.95 | **+73.2%** | 10.373 s | **0.651 s** |
+
+“Per-stream share” is aggregate throughput divided by stream count, not each request's independent decode rate. TTFT means time to the first nonempty content chunk. The largest improvement mostly comes from removing the previous four-active-request bottleneck; multiple settings changed, so this table does not isolate any single optimization.
+
+| Capacity / memory check | Measured result | Scope |
+| --- | --- | --- |
+| Minimum sampled MemAvailable, 8 requests | 7.31 → **9.27 GiB** | Warm short-request workload; 250 ms sampling |
+| 16-request burst | **16/16**, 128.49 aggregate tok/s; 11.953 s median TTFT | Metrics captured **8 active + 8 queued**, not 16 active slots |
+| Actual KV pool | **5.41 GiB / 360,264 tokens** | Shared capacity; **not eight full 262k contexts** |
+| Long-context retrieval | **3/3 needles** at each of 32k, 128k and 250k | Synthetic retrieval, not long-context coding accuracy |
+| Backend service restarts during qualification | **0** | Bounded test session, not a long-duration reliability guarantee |
+
+The host uses a 4 GiB kernel free-memory reserve, so its MemAvailable figures are not directly comparable to the upstream author's host. The profile retains a low-memory watchdog; the 90 GiB container limit does not account for every GPU-driver allocation.
+
+### Quality and client compatibility
+
+| Check | Result | Caveat |
+| --- | --- | --- |
+| Coding, 20 local tasks | **19/20 functional; 18/20 strict** | Historical Qwen: 19/20 functional and 19/20 strict; no quality improvement claimed |
+| Vision, unconstrained output | **4/4 correct; 0/4 raw JSON** | All answers used Markdown fences |
+| Same vision cases with strict JSON schema | **4/4 correct and schema-valid** | Four small synthetic cases |
+| Nonstreaming tool arguments | **5/5 exact** | One repeated schema; no real tool executed |
+| Authenticated HTTPS + streaming tool round trip | **Passed** | Linked mock tool result; no client-app UI or real build exercised |
+
+These are small qualification suites, **not SWE-bench, BFCL, a broad vision benchmark, or a claim of superiority over DeepSeek**. Failures, historical comparisons and exact limitations are included in the [full report](docs/measured-profile-2026-09-07.md).
+
+## What changes in this fork?
+
+- **Reproducible inputs:** pin the model snapshot and container digest; normal service startup reuses local assets and does not pull a new image or checkpoint.
+- **More short-request capacity:** eight serving slots and matching full-decode graph widths, using upstream FP8 KV, BF16 recurrent state, MTP and reduced-vocabulary drafting.
+- **Memory headroom:** 36 GiB host-reserve setting, explicit 90 GiB container budget and a consistent 94 GiB startup availability gate on the measured platform. The KV wish is a ceiling, not a promised allocation.
+- **Failure containment:** preserve the memory watchdog, wait for memory recovery before starting, and allow only an initial start plus one automatic retry per hour.
+- **Transactional deployment:** validated immutable releases, readiness checks and rollback, including recovery when the preceding backend is already offline.
+- **Safer exposure:** bind the inference backend to loopback; configure authentication and remote access separately. Standard telemetry is disabled, but this is **not** a blanket network-egress firewall or a complete audit of every container dependency.
+
+See [PRODUCTION-NOTES.md](PRODUCTION-NOTES.md) for attribution and the reasons behind these choices. The published installer is a generalized adaptation of the measured deployment; its public release identifier does not mean that exact public artifact has been requalified on another host.
+
+## Start here
+
+Read [deployment/README.md](deployment/README.md) before running the production installer. Review the pinned model's license and provenance, resource requirements and planned changes. Check the settings against your host; do not copy the memory numbers to a different system without measuring.
+
+The upstream `download.sh` / `start.sh` workflow remains available for experimentation. The archived instructions below describe upstream defaults and measurements, not this fork's current production defaults. **Do not start the manual launcher alongside the managed service.**
+
+No model weights, fitted private corpus, credentials, gateway configuration or deployment-host identifiers are included. The fitted vocabulary is generated locally; its exact measured file is not published, so performance on a new corpus can differ.
+
+## Credits and license
+
+Original recipe and inference optimizations: [MiaAI-Lab](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark), with the upstream acknowledgements retained below. This fork retains the [AGPL-3.0-or-later license](LICENSE). The model weights, vLLM and container dependencies keep their own licenses; this repository does not redistribute model weights.
+
+## Upstream historical reference
+
+The following is the upstream README at the base revision. **Its measurements belong to the upstream author and use different workloads and profiles.** Its statements about shipped defaults, available memory and startup behavior must not be read as measurements of this fork. For this fork's current installation steps, use [deployment/README.md](deployment/README.md).
+
+<details>
+<summary>Expand the original upstream README, technical explanations and credits</summary>
+
 <h1 align="center">Qwen3.8-Flash-Next on ONE DGX Spark (TP=1)</h1>
 
 <p align="center">
@@ -906,3 +987,5 @@ they operate on, each of which carries its own terms:
   `RESPONSIBLE_USE.md` agreement, with its licence inherited from the upstream
   Qwen base model. This repository ships a flag that can serve those weights.
   It does not redistribute them and does not relicense them.
+
+</details>

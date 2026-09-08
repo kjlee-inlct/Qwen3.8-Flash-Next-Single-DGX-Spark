@@ -38,6 +38,8 @@ done
 _CLI_HF_TOKEN="${HF_TOKEN:-}"
 _CLI_ABLIT="${ABLIT:-}"
 _CLI_TP1_MODEL_ID="${TP1_MODEL_ID:-}"
+_CLI_MODEL_REVISION="${MODEL_REVISION:-}"
+_CLI_HF_HOME="${HF_HOME:-}"
 if [[ -f .env ]]; then
     # shellcheck source=.env
     source .env
@@ -48,6 +50,9 @@ HF_TOKEN="${HF_TOKEN:-}"
 ABLIT="${ABLIT:-0}"
 [[ "$ABLIT" == "0" || "$ABLIT" == "1" ]] || err "ABLIT must be 0 or 1 (got: '$ABLIT')"
 [[ -n "$_CLI_TP1_MODEL_ID" ]] && TP1_MODEL_ID="$_CLI_TP1_MODEL_ID"
+[[ -n "$_CLI_MODEL_REVISION" ]] && MODEL_REVISION="$_CLI_MODEL_REVISION"
+[[ -n "$_CLI_HF_HOME" ]] && HF_HOME="$_CLI_HF_HOME"
+MODEL_REVISION="${MODEL_REVISION:-}"
 
 STOCK_MODEL_ID="Mia-AiLab/Qwen3.8-Flash-Next-NVFP4"
 ABLIT_MODEL_ID="drowzeys/keys-Qwen3.8-flash-next-ablit-Mia-Single-Spark-only"
@@ -71,8 +76,8 @@ ABLIT_PAGE="https://huggingface.co/${ABLIT_MODEL_ID}"
 # Prints a snapshot hash. Exit 0 = complete, 1 = incomplete, 2 = none.
 # Prefers refs/main when that snapshot is complete, else the newest complete
 # snapshot, else refs/main even if incomplete (so a partial tree can resume).
-resolve_snapshot() {  # <model-path>
-    python3 - "$1" <<'PY'
+resolve_snapshot() {  # <model-path> [pinned-revision]
+    python3 - "$1" "${2:-}" <<'PY'
 import json, pathlib, sys
 
 def complete(snapshot: pathlib.Path) -> bool:
@@ -85,6 +90,10 @@ def complete(snapshot: pathlib.Path) -> bool:
 
 repo = pathlib.Path(sys.argv[1])
 snap_root = repo / "snapshots"
+pinned = sys.argv[2].strip()
+if pinned:
+    print(pinned)
+    raise SystemExit(0 if complete(snap_root / pinned) else 1)
 main = (repo / "refs" / "main").read_text().strip() if (repo / "refs" / "main").is_file() else ""
 if main and complete(snap_root / main):
     print(main)
@@ -122,6 +131,7 @@ next_start_hint() {
 }
 
 info "Model:  $MODEL_ID"
+info "Revision: ${MODEL_REVISION:-refs/main}"
 info "Cache:  $HF_CACHE_DIR"
 if [[ "$MODEL_ID" == "$ABLIT_MODEL_ID" ]]; then
     info "ABLIT=1 is gated. Set HF_TOKEN in .env (or export it) before downloading:"
@@ -147,7 +157,7 @@ fi
 if [[ -d "$MODEL_PATH" ]]; then
     SNAP=""
     SNAP_RC=0
-    SNAP="$(resolve_snapshot "$MODEL_PATH")" && SNAP_RC=0 || SNAP_RC=$?
+    SNAP="$(resolve_snapshot "$MODEL_PATH" "$MODEL_REVISION")" && SNAP_RC=0 || SNAP_RC=$?
     if [[ "$SNAP_RC" -eq 0 && -n "$SNAP" ]]; then
         ok "Already in cache: $MODEL_PATH ($(du -sh "$MODEL_PATH" 2>/dev/null | cut -f1))"
         info "Nothing to do."
@@ -192,6 +202,7 @@ from huggingface_hub import snapshot_download
 try:
     p = snapshot_download(
         repo_id=sys.argv[1],
+        revision=(os.environ.get("MODEL_REVISION") or None),
         token=(os.environ.get("HF_TOKEN") or None),
         max_workers=4,
     )
@@ -211,7 +222,7 @@ except Exception as e:
             "Accept the terms on that page:\n"
             f"  https://huggingface.co/{sys.argv[1]}\n"
             "Then retry with HF_TOKEN set:\n"
-            f"  {sys.argv[2] if len(sys.argv) > 2 else 'HF_TOKEN=hf_... ./download.sh'}",
+            "  " + (sys.argv[2] if len(sys.argv) > 2 else "HF_TOKEN=hf_... ./download.sh"),
             file=sys.stderr,
         )
         sys.exit(1)
@@ -227,12 +238,19 @@ fi
 
 info "Downloading (resumable; interrupt and rerun to continue)..."
 if python3 -c "import huggingface_hub" 2>/dev/null; then
-    HF_HOME="$HF_CACHE_DIR" HF_TOKEN="$HF_TOKEN" python3 -c "$DL_PY" "$MODEL_ID" "$RETRY_HINT"
+    HF_HOME="$HF_CACHE_DIR" HF_TOKEN="$HF_TOKEN" MODEL_REVISION="$MODEL_REVISION" \
+        HF_ENDPOINT=https://huggingface.co HF_HUB_DISABLE_TELEMETRY=1 \
+        HF_HUB_DISABLE_IMPLICIT_TOKEN=1 DO_NOT_TRACK=1 \
+        python3 -c "$DL_PY" "$MODEL_ID" "$RETRY_HINT"
 else
     info "huggingface_hub not on the host; using the container image instead."
-    IMAGE="${IMAGE:-vllm/vllm-openai:qwen38-flash-next}"
-    docker run --rm -i \
+    IMAGE="${IMAGE:?Set IMAGE to an audited digest and explicitly docker pull it first}"
+    docker image inspect "$IMAGE" >/dev/null || err "Runtime image is absent; explicitly pull the pinned image first."
+    docker run --pull=never --rm -i \
         -e HF_HOME=/hf -e HF_TOKEN="$HF_TOKEN" \
+        -e MODEL_REVISION="$MODEL_REVISION" \
+        -e HF_ENDPOINT=https://huggingface.co \
+        -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_IMPLICIT_TOKEN=1 -e DO_NOT_TRACK=1 \
         -v "$HF_CACHE_DIR:/hf" \
         --entrypoint python3 "$IMAGE" -c "$DL_PY" "$MODEL_ID" "$RETRY_HINT"
 fi
@@ -241,7 +259,7 @@ fi
 [[ -d "$MODEL_PATH" ]] || err "Download finished but $MODEL_PATH is missing."
 SNAP=""
 SNAP_RC=0
-SNAP="$(resolve_snapshot "$MODEL_PATH")" && SNAP_RC=0 || SNAP_RC=$?
+SNAP="$(resolve_snapshot "$MODEL_PATH" "$MODEL_REVISION")" && SNAP_RC=0 || SNAP_RC=$?
 [[ -n "$SNAP" ]] || err "No snapshot directory under $MODEL_PATH/snapshots"
 [[ "$SNAP_RC" -eq 0 ]] || err "Snapshot is missing one or more indexed weight shards — the download is incomplete. Rerun this script."
 
