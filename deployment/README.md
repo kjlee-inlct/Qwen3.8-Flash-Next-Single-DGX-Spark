@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/03378aa-bootstrap-validation-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/03378aa-hf-token-validation-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -260,6 +260,12 @@ behavioral tests:
 ```bash
 ./clone-install-test.sh --full
 ```
+
+Full mode uses `HF_TOKEN` when it is already exported. If it is unset, the
+script asks for an optional token with terminal echo disabled; pressing Enter
+continues anonymously. A literal token command-line option is intentionally not
+provided because command arguments can remain in shell history and process
+listings. For unattended anonymous execution, add `--no-hf-token-prompt`.
 
 The default target is `./Qwen3.8-Flash-Next-Single-DGX-Spark-validation`. Use
 `--target /absolute/path` to change it. An existing target is refused unless it

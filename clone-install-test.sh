@@ -27,6 +27,7 @@ SERVICE="qwen3.8-flash-next.service"
 
 FULL=false
 REUSE=false
+HF_TOKEN_PROMPT=true
 TARGET="$PWD/Qwen3.8-Flash-Next-Single-DGX-Spark-validation"
 DRAFT_VOCAB=""
 CORPUS_DIR=""
@@ -49,6 +50,7 @@ Options:
   --corpus-dir ABS_PATH     Corpus directory used to build a draft vocabulary
   --prefill-tokens N        Mixed-test long prompt size (default: 32768)
   --log ABSOLUTE_PATH       Log destination (default: current directory + timestamp)
+  --no-hf-token-prompt      Do not ask for a token when HF_TOKEN is unset
   -h, --help                Show this help
 
 --draft-vocab and --corpus-dir are mutually exclusive. With neither, --full uses
@@ -76,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         --corpus-dir) [[ $# -ge 2 ]] || die "--corpus-dir needs a path"; CORPUS_DIR="$2"; shift 2 ;;
         --prefill-tokens) [[ $# -ge 2 ]] || die "--prefill-tokens needs a value"; PREFILL_TOKENS="$2"; shift 2 ;;
         --log) [[ $# -ge 2 ]] || die "--log needs a path"; LOG_FILE="$2"; shift 2 ;;
+        --no-hf-token-prompt) HF_TOKEN_PROMPT=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
@@ -93,6 +96,20 @@ if [[ -n "$CORPUS_DIR" ]]; then
     [[ -d "$CORPUS_DIR" ]] || die "Corpus directory not found: $CORPUS_DIR"
     [[ -s "$CORPUS_DIR/local_code.txt" ]] || die "Missing $CORPUS_DIR/local_code.txt"
     [[ -s "$CORPUS_DIR/model_outputs.jsonl" ]] || die "Missing $CORPUS_DIR/model_outputs.jsonl"
+fi
+
+# A literal --hf-token argument is deliberately not supported: command arguments
+# are visible in shell history and process listings. Prefer an existing HF_TOKEN
+# environment variable; otherwise full mode asks through /dev/tty with echo off.
+HF_TOKEN_INPUT="${HF_TOKEN:-}"
+if [[ "$FULL" == true && -z "$HF_TOKEN_INPUT" && "$HF_TOKEN_PROMPT" == true ]]; then
+    if [[ -r /dev/tty && -w /dev/tty ]]; then
+        read -r -s -p "Hugging Face token (optional; Enter for unauthenticated download): " \
+            HF_TOKEN_INPUT </dev/tty
+        printf '\n' >/dev/tty
+    else
+        echo "No interactive terminal is available; continuing without HF_TOKEN." >&2
+    fi
 fi
 
 if [[ -z "$LOG_FILE" ]]; then
@@ -143,7 +160,8 @@ echo "repository=$EXPECTED_REPOSITORY"
 echo "branch=$BRANCH"
 echo "target=$TARGET"
 echo "log=$LOG_FILE"
-echo "HF_TOKEN is never printed or passed to the serving container."
+echo "huggingface_auth=$([[ -n "$HF_TOKEN_INPUT" ]] && echo token-provided || echo unauthenticated)"
+echo "HF_TOKEN is never printed, placed in command arguments, or passed to the serving container."
 
 for command in git bash python3 curl sha256sum awk sed tee; do
     command -v "$command" >/dev/null 2>&1 || die "Required command missing: $command"
@@ -169,8 +187,9 @@ if [[ -e "$TARGET" ]]; then
     [[ -z "$(git -C "$CHECKOUT" status --porcelain)" ]] || die "Reuse target has local changes"
     git -C "$CHECKOUT" fetch origin "$BRANCH" --prune
     git -C "$CHECKOUT" switch "$BRANCH"
+    git -C "$CHECKOUT" merge --ff-only "origin/$BRANCH"
     [[ "$(git -C "$CHECKOUT" rev-parse HEAD)" == "$(git -C "$CHECKOUT" rev-parse "origin/$BRANCH")" ]] || \
-        die "Reuse checkout is not exactly origin/$BRANCH; update it manually after review"
+        die "Reuse checkout is not exactly origin/$BRANCH"
 else
     git clone --branch "$BRANCH" --single-branch "$REPOSITORY_URL" "$TARGET"
     CHECKOUT="$TARGET"
@@ -229,7 +248,7 @@ if [[ ! -f "$snapshot_path/model.safetensors.index.json" && "$available_kib" -lt
     die "Pinned model is absent and the state filesystem has less than 150 GiB free"
 fi
 sudo docker pull "$IMAGE"
-sudo docker run --rm --pull=never \
+printf '%s' "$HF_TOKEN_INPUT" | sudo docker run --rm --pull=never -i \
     -e HF_HOME=/hf \
     -e HF_ENDPOINT=https://huggingface.co \
     -e HF_HUB_DISABLE_TELEMETRY=1 \
@@ -238,7 +257,7 @@ sudo docker run --rm --pull=never \
     -v "$STATE_DIR/huggingface:/hf" \
     --entrypoint python3 \
     "$IMAGE" \
-    -c 'from huggingface_hub import snapshot_download; snapshot_download(repo_id="'"$MODEL_ID"'", revision="'"$MODEL_REVISION"'", cache_dir="/hf/hub", token=False)'
+    -c 'import sys; from huggingface_hub import snapshot_download; token=sys.stdin.read().strip() or False; snapshot_download(repo_id="'"$MODEL_ID"'", revision="'"$MODEL_REVISION"'", cache_dir="/hf/hub", token=token)'
 
 echo
 echo "===== SYSTEM-WIDE VM PROFILE ====="
