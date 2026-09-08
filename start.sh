@@ -259,6 +259,13 @@ done
 if ! [[ "$MAX_MODEL_LEN" =~ ^[1-9][0-9]*$ ]]; then
     err "MAX_MODEL_LEN must be a positive integer (got: '$MAX_MODEL_LEN')"
 fi
+if [[ "$MTP_NUM_SPECULATIVE_TOKENS" =~ ^[1-9][0-9]*$ ]] &&
+        [[ "$EXTRA_VLLM_ARGS" =~ (^|[[:space:]])--async-scheduling($|=|[[:space:]]) ]]; then
+    err "--async-scheduling is unsafe with MTP for this Qwen3.8-Flash-Next runtime.
+       It can expose speculative placeholder indices to the n-gram context path and
+       silently change generated output. Remove --async-scheduling or set
+       MTP_NUM_SPECULATIVE_TOKENS=0, then re-validate correctness."
+fi
 [[ "$YARN" == "0" || "$YARN" == "1" ]] || err "YARN must be 0 or 1 (got: '$YARN')"
 if [[ "$ABLIT" == "1" ]]; then
     warn "ABLIT=1: serving gated Keys checkpoint ($ABLIT_MODEL_ID)."

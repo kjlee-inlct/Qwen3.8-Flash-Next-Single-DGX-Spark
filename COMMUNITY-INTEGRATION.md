@@ -57,3 +57,24 @@ The integration is checked with Bash syntax validation, Python unit tests for th
 deployment helpers and load harness, manifest verification and Git whitespace
 checks. A real DGX Spark launch, model download, privileged systemd installation,
 GPU load test and overnight soak remain hardware validation tasks.
+
+## Follow-up review: independent DGX Spark recipes
+
+The independent `blazux/qwen3.8-Flash-DGX` and
+`dolf3131/qwen3.8-flash-next-dgx-spark` repositories do not share this Git
+history and target different checkpoint/runtime combinations. Their image-level
+Mamba, QSA top-k, PLE mmap, mixed-precision and TP=1 skinny-GEMM patches are not
+copied into the production image without reproduction on this pinned stack.
+
+The immediately portable parts are adopted as `bench/runtime_validation.py`:
+
+- repeated greedy text and first-token logprob stability checks;
+- long real-text cold/warm TTFT with an explicit prefix-cache metric check;
+- baseline versus competing-long-prefill decode stream-gap measurement;
+- loopback-only operation that stores no generated answer text.
+
+The launcher also rejects `--async-scheduling` when MTP is enabled. The reviewed
+recipe reports that this combination can let speculative placeholder indices
+reach Qwen3.8-Flash-Next's n-gram context path and silently alter output. This is
+a correctness guard, not a performance tuning claim. Image-level changes remain
+deferred until the new validation tool establishes behavior on the target DGX.

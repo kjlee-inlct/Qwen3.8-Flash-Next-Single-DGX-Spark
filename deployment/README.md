@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/78b0675-community-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/03378aa-runtime-validation-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -226,3 +226,16 @@ python3 deployment/manifest_release.py verify . .
 
 These cover manifest isolation/path validation and vocabulary validation, not
 the host driver, Docker runtime, full privileged installer, or production load.
+
+On a running loopback-bound backend, execute the non-destructive behavioral
+validation before considering image-level performance patches:
+
+```bash
+python3 bench/runtime_validation.py smoke
+python3 bench/runtime_validation.py mixed --prefill-tokens 32768
+```
+
+The smoke test checks coherence, repeated greedy output/logprob stability, long
+prompt TTFT and the prefix-cache metric when available. The mixed test measures
+decode stream gaps while a long prefill competes with it. Neither command changes
+the server configuration.
