@@ -70,7 +70,7 @@ restore_production() {
     [[ "$restore_status" -eq 0 ]] || exit 1
     exit "$original_status"
 }
-trap restore_pro EXIT INT TERM
+trap restore_production EXIT INT TERM
 
 echo "This planned outage stops the healthy production service, runs the Mamba-only"
 echo "image and correctness suite, and restores the pinned production service."
