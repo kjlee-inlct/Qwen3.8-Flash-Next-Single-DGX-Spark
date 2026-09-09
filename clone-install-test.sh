@@ -17,7 +17,7 @@
 set -Eeuo pipefail
 
 REPOSITORY_URL="https://github.com/kjlee-inlct/Qwen3.8-Flash-Next-Single-DGX-Spark.git"
-BRANCH="validate-runtime-behavior"
+BRANCH="main"
 EXPECTED_REPOSITORY="kjlee-inlct/Qwen3.8-Flash-Next-Single-DGX-Spark"
 IMAGE="vllm/vllm-openai:qwen38-flash-next@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8"
 MODEL_ID="Mia-AiLab/Qwen3.8-Flash-Next-NVFP4"
@@ -28,7 +28,7 @@ SERVICE="qwen3.8-flash-next.service"
 FULL=false
 REUSE=false
 HF_TOKEN_PROMPT=true
-TARGET="$PWD/Qwen3.8-Flash-Next-Single-DGX-Spark-validation"
+TARGET="$PWD/Qwen3.8-Flash-Next-Single-DGX-Spark"
 DRAFT_VOCAB=""
 CORPUS_DIR=""
 PREFILL_TOKENS=32768

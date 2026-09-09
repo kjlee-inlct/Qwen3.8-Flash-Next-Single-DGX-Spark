@@ -58,7 +58,17 @@ These are small qualification suites, **not SWE-bench, BFCL, a broad vision benc
 - **Transactional deployment:** validated immutable releases, readiness checks and rollback, including recovery when the preceding backend is already offline.
 - **Safer exposure:** bind the inference backend to loopback; configure authentication and remote access separately. Standard telemetry is disabled, but this is **not** a blanket network-egress firewall or a complete audit of every container dependency.
 
-See [PRODUCTION-NOTES.md](PRODUCTION-NOTES.md) for attribution and the reasons behind these choices. The published installer is a generalized adaptation of the measured deployment; its public release identifier does not mean that exact public artifact has been requalified on another host.
+See [PRODUCTION-NOTES.md](PRODUCTION-NOTES.md) for attribution and the reasons behind these choices. The public installer was exercised end to end on one GB10 DGX Spark on 2026-09-09; see the deployment guide for the exact scope and remaining limits.
+
+## Public installer validation — 2026-09-09
+
+The public clone/install/test path was exercised end to end on one NVIDIA GB10
+DGX Spark using the pinned image and model revision. Static tests, asset reuse,
+system-wide host-profile application, immutable systemd cutover, API smoke and
+mixed-load validation completed with exit status 0. The repeated long prompt
+increased prefix-cache hits from 0 to 4,992 tokens; measured TTFT fell from
+5.590 seconds cold to 1.886 seconds warm. These results validate this exact
+host/run, not every DGX OS version or future image/model revision.
 
 ## Start here
 
