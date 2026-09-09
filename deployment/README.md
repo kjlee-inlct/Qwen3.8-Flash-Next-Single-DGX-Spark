@@ -208,7 +208,7 @@ the expensive model cache, state, rollback backups, pinned image, host sysctl
 profile, and the checkout itself:
 
 ```bash
-sudo ./uninstall-root.sh
+sudo bash ./uninstall-root.sh
 ```
 
 The script prints its exact plan and requires typing `REMOVE`. For automation,
@@ -216,7 +216,7 @@ add `--yes` only after reviewing that plan. Optional destructive scopes are
 independent: `--purge-state`, `--purge-backups`, `--remove-image`, and
 `--remove-sysctl-profile`; `--purge-all` selects all four. Removing the sysctl
 file does not guess the machine's former live values. Reboot or apply a separately
-reviewed host policy afterward. Use `sudo ./uninstall-root.sh --help` before any
+reviewed host policy afterward. Use `sudo bash ./uninstall-root.sh --help` before any
 purge operation.
 
 ## Optional OS maintenance
