@@ -10,6 +10,10 @@ STATE_DIR="/var/lib/qwen3.8-flash-next"
 BACKUP_BASE="/var/backups/qwen3.8-flash-next"
 UNIT="qwen3.8-flash-next.service"
 UNIT_FILE="/etc/systemd/system/$UNIT"
+PROXY_SOCKET="qwen3.8-openwebui-proxy.socket"
+PROXY_SERVICE="qwen3.8-openwebui-proxy.service"
+PROXY_SOCKET_FILE="/etc/systemd/system/$PROXY_SOCKET"
+PROXY_SERVICE_FILE="/etc/systemd/system/$PROXY_SERVICE"
 SYSCTL_FILE="/etc/sysctl.d/90-qwen38-qualified-profile.conf"
 CONTAINER="vllm-fn-tp1"
 IMAGE="vllm/vllm-openai:qwen38-flash-next@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8"
@@ -88,9 +92,20 @@ require_safe_directory "$INSTALL_BASE"
 require_safe_directory "$STATE_DIR"
 require_safe_directory "$BACKUP_BASE"
 require_safe_file "$UNIT_FILE"
+require_safe_file "$PROXY_SOCKET_FILE"
+require_safe_file "$PROXY_SERVICE_FILE"
 require_safe_file "$SYSCTL_FILE"
 
-# Do not delete an unrelated unit merely because it has the same filename.
+# Do not delete unrelated units merely because they use the managed names.
+for proxy_file in "$PROXY_SOCKET_FILE" "$PROXY_SERVICE_FILE"; do
+    if [[ -f "$proxy_file" ]]; then
+        grep -Fq "Managed Qwen3.8 OpenWebUI proxy" "$proxy_file" || {
+            echo "Refusing unmanaged proxy unit file: $proxy_file" >&2
+            exit 1
+        }
+    fi
+done
+
 if [[ -f "$UNIT_FILE" ]]; then
     grep -Fq '/opt/qwen3.8-flash-next/current/deployment/service-runner.sh' "$UNIT_FILE" || {
         echo "Refusing unmanaged unit file: $UNIT_FILE" >&2
@@ -100,6 +115,7 @@ fi
 
 echo "Qwen3.8 managed uninstall plan"
 echo "  remove service/unit: yes"
+echo "  remove UI proxy:    yes, if managed units are installed"
 echo "  remove releases:     yes ($INSTALL_BASE)"
 echo "  purge model/state:   $PURGE_STATE ($STATE_DIR)"
 echo "  purge backups:       $PURGE_BACKUPS ($BACKUP_BASE)"
@@ -113,6 +129,11 @@ if [[ "$ASSUME_YES" != true ]]; then
     read -r -p "Type REMOVE to continue: " answer </dev/tty
     [[ "$answer" == REMOVE ]] || { echo "Cancelled."; exit 0; }
 fi
+
+echo "Stopping and removing the managed OpenWebUI proxy, if present ..."
+systemctl disable --now "$PROXY_SOCKET" 2>/dev/null || true
+systemctl stop "$PROXY_SERVICE" 2>/dev/null || true
+rm -f -- "$PROXY_SOCKET_FILE" "$PROXY_SERVICE_FILE"
 
 echo "Stopping and disabling $UNIT ..."
 systemctl stop "$UNIT" 2>/dev/null || true

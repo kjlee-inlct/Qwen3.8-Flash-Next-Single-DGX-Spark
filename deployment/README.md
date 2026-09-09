@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/acccc85-cache-qsa-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/8e32984-openwebui-proxy-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -200,10 +200,56 @@ sudo /bin/bash /opt/qwen3.8-flash-next/current/deployment/rollback-root.sh
 Rollback requires a previous managed release and starts it; check readiness
 afterward. Historical files are retained rather than deleting models/releases.
 
+## Optional OpenWebUI Docker proxy
+
+The production runner deliberately requires vLLM to remain on
+`127.0.0.1:8888`. If an existing Dockerized OpenWebUI connection already uses
+`http://host.docker.internal:8000/v1`, install the managed socket proxy:
+
+```bash
+sudo bash ./install-openwebui-proxy-root.sh
+```
+
+The installer discovers the IPv4 address assigned to `docker0` and listens only
+on that address. It refuses an absent Docker bridge, an arbitrary listen address,
+an invalid port, and an unmanaged or partial pre-existing unit. It does not edit
+OpenWebUI, the Qwen runtime `.env`, or the loopback-only production guard. The
+request path is preserved:
+
+```text
+OpenWebUI -> docker0:8000 -> 127.0.0.1:8888 -> vLLM
+```
+
+Verify both ends after Qwen reports `Application startup complete`:
+
+```bash
+curl --fail http://127.0.0.1:8888/v1/models
+docker exec open-webui curl --fail \
+  http://host.docker.internal:8000/v1/models
+```
+
+Port 8000 is the default only because it matches the stated existing OpenWebUI
+connection. Override ports explicitly when necessary:
+
+```bash
+sudo bash ./install-openwebui-proxy-root.sh \
+  --listen-port 8000 --backend-port 8888
+```
+
+Remove only the proxy, without stopping or deleting Qwen or OpenWebUI:
+
+```bash
+sudo bash ./uninstall-openwebui-proxy-root.sh
+```
+
+The main `uninstall-root.sh` also removes these managed proxy units by default.
+Both uninstall paths refuse same-named unit files that do not carry this recipe's
+management marker.
+
 ## Uninstall
 
 Run the uninstaller from a reviewed Git checkout. Its default removes the managed
-service, exact container, systemd unit, and immutable releases while preserving
+service, exact container, managed OpenWebUI proxy units, systemd unit, and immutable releases while preserving
 the expensive model cache, state, rollback backups, pinned image, host sysctl
 profile, and the checkout itself:
 
