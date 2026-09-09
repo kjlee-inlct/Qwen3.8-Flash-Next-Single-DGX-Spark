@@ -10,6 +10,7 @@ import pathlib
 import re
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timezone
 
 import runtime_validation as runtime
@@ -150,8 +151,12 @@ def snapshot(port: int, ple_root: pathlib.Path) -> dict:
 def numeric_delta(before, after):
     """Recursively subtract matching numeric counters; omit non-counters."""
     if isinstance(before, dict) and isinstance(after, dict):
-        return {key: numeric_delta(before[key], after[key]) for key in before.keys() & after.keys()
-                if numeric_delta(before[key], after[key]) is not None}
+        result = {}
+        for key in before.keys() & after.keys():
+            delta = numeric_delta(before[key], after[key])
+            if delta is not None:
+                result[key] = delta
+        return result
     if isinstance(before, (int, float)) and isinstance(after, (int, float)):
         return after - before
     return None
@@ -224,7 +229,7 @@ def main() -> None:
     if not args.corpus.is_file():
         parser().error(f"Corpus file does not exist: {args.corpus}")
     runtime.check_backend(args.base_url, args.model)
-    port = int(args.base_url.rsplit(":", 1)[1])
+    port = urllib.parse.urlsplit(args.base_url).port or 80
     report = {
         "schema": 1,
         "mode": "storage-prefill-observation",
