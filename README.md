@@ -10,6 +10,7 @@ The measured configuration uses the standard `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4
 - [Production changes and tradeoffs](PRODUCTION-NOTES.md).
 - [Full measured profile and methodology](docs/measured-profile-2026-09-07.md).
 - [Storage/prefill observer](bench/storage_prefill.py): non-mutating TTFT, fault, memory, process-I/O and physical-device counters.
+- [Cache/QSA correctness validator](bench/cache_correctness.py): long-prefix cold/warm answer-hash and first-token-logprob equality plus varied-shape greedy repetition.
 - [Community fork integration review](COMMUNITY-INTEGRATION.md): adopted and deferred commits with rationale.
 - [Upstream historical documentation](#upstream-historical-reference): retained below with its original credits and licensing.
 
