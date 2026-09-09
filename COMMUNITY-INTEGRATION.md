@@ -106,10 +106,14 @@ answer hashes/logprobs varied, and the 8K first/cache-hit answers differed.
 - Sweep `long-prefill-token-threshold` only if production traffic shows harmful
   decode gaps. It trades prefill throughput for stream responsiveness and needs
   controlled restarts plus an A/B report.
-- A long-context correctness failure is now reproduced. Build a separately
-  digest-pinned experimental image with only the Mamba state-copy race and
-  prefix block-size fixes first. Add deterministic top-k only in a second A/B
-  if QSA instability remains. Skinny-GEMM and MTP index sharing stay deferred.
+- A long-context correctness failure is now reproduced. The isolated
+  `experiments/mamba-prefix` image applies only the Mamba state-copy race,
+  bounded invalid-block guard, scheduler split and state-slot block-size fixes
+  to the exact pinned base digest. Its source payloads are byte-pinned to the
+  reviewed Saren-Arterius fork revision. It remains experimental until the
+  existing cache/QSA suite passes on GB10 and the production service is restored.
+  Add deterministic top-k only in a second A/B if QSA instability remains.
+  Skinny-GEMM and MTP index sharing stay deferred.
 
 ### Do not apply to the current Mia checkpoint profile
 
