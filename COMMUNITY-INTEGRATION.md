@@ -89,8 +89,11 @@ deferred until the new validation tool establishes behavior on the target DGX.
 
 - The 20-repeat deterministic smoke and required-prefix-hit check completed on
   2026-09-09. Repeat it after any image, model, kernel or cache-policy change.
-- Add storage/prefill observability for real-text 8k/32k/128k prompts: TTFT,
-  prefix hits, major faults, memory, swap and process/device read counters.
+- `bench/storage_prefill.py` provides non-mutating real-text 8K/32K/128K TTFT,
+  prefix-hit, major-fault, memory, swap, process-I/O, physical-device and
+  packed-PLE-size observation. The 2026-09-09 warm-service run found 4.324/
+  17.408/73.824-second first TTFT, 1.882/1.841/2.277-second immediate-repeat
+  TTFT, and no material SSD paging bottleneck; see the sanitized result JSON.
 - Record KV capacity on natural service starts so launch-to-launch variation can
   be assessed without creating an outage solely for measurement.
 

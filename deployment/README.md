@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/dc5a37e-determinism20-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/1bca67c-storage-observer-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -262,6 +262,42 @@ The smoke test checks coherence, repeated greedy output/logprob stability, long
 prompt TTFT and the prefix-cache metric when available. The mixed test measures
 decode stream gaps while a long prefill competes with it. Neither command changes
 the server configuration.
+
+### Storage and prefill observation
+
+The observer runs real-text first-observed and immediate-repeat prefills at 8K,
+32K and 128K by default. Each size receives an early unique marker so one size
+does not reuse another size's long prefix. It records vLLM prefix hits,
+`/proc/vmstat`, selected `/proc/meminfo` values, readable vLLM process-tree
+fault/I/O counters, physical block-device read counters and packed PLE table
+sizes. It never invokes `drop_caches`, changes a sysctl, or restarts the service;
+therefore "first-observed" must not be described as a guaranteed cold OS cache.
+
+```bash
+python3 bench/storage_prefill.py \\
+  --sizes 8192,32768,131072 \\
+  --output qwen38-storage-prefill-$(date -u +%Y%m%dT%H%M%SZ).json
+```
+
+Measured on the already-running production service without clearing caches:
+
+| Prompt | First TTFT | Immediate repeat | Prefix-hit increase | First global major faults | First NVMe reads |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 8K | 4.324 s | 1.882 s | 4,992 tokens | 0 | 6.51 MB |
+| 32K | 17.408 s | 1.841 s | 29,952 tokens | 0 | 0.34 MB |
+| 128K | 73.824 s | 2.277 s | 128,128 tokens | 149 | 9.03 MB |
+
+This warm-service observation found no material SSD paging bottleneck. Global
+VM/block counters can include unrelated activity, and process `read_bytes` does
+not reliably attribute mmap-fault I/O. Preserve the raw local report for deeper
+host diagnosis; the checked-in summary removes host paths and PIDs.
+
+Run it as the ordinary user first. Some kernels restrict another user's
+`/proc/<pid>/io`; unavailable process counters remain null/empty while global
+kernel and block-device counters are still reported. Do not use sudo merely to
+make optional counters appear unless the script and output path have been
+reviewed. The report contains the absolute corpus and PLE paths but no generated
+answer text.
 
 ## Clone, install, test and collect one log
 

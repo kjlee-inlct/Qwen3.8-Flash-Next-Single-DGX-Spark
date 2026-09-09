@@ -9,6 +9,7 @@ The measured configuration uses the standard `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4
 - [Deployment guide](deployment/README.md): review, stage, install and roll back.
 - [Production changes and tradeoffs](PRODUCTION-NOTES.md).
 - [Full measured profile and methodology](docs/measured-profile-2026-09-07.md).
+- [Storage/prefill observer](bench/storage_prefill.py): non-mutating TTFT, fault, memory, process-I/O and physical-device counters.
 - [Community fork integration review](COMMUNITY-INTEGRATION.md): adopted and deferred commits with rationale.
 - [Upstream historical documentation](#upstream-historical-reference): retained below with its original credits and licensing.
 
@@ -71,6 +72,8 @@ increased prefix-cache hits from 0 to 4,992 tokens; measured TTFT fell from
 host/run, not every DGX OS version or future image/model revision.
 
 A follow-up 20-repeat greedy run at 32,768 prompt tokens also kept output text and first-token top-logprobs stable. Prefix hits increased from 0 to 29,952 tokens and TTFT measured 18.809 seconds cold versus 1.848 seconds warm; see [`bench/results/2026-09-09-runtime-validation.json`](bench/results/2026-09-09-runtime-validation.json).
+
+A non-mutating storage/prefill run on the same live service measured first-observed TTFT of 4.324/17.408/73.824 seconds at 8K/32K/128K and immediate-repeat TTFT of 1.882/1.841/2.277 seconds. The 128K first observation recorded 149 global major faults and 9.03 MB of physical NVMe reads; this warm-service run did not show a material SSD paging bottleneck. See [`bench/results/2026-09-09-storage-prefill.json`](bench/results/2026-09-09-storage-prefill.json).
 
 ## Start here
 
