@@ -19,9 +19,8 @@ Adopted the reserve-aware production profile and its deployment layer:
 
 The profile was measured on one DGX Spark and remains opt-in. Its 36 GiB host
 reserve, kernel VM settings, eight short-request slots and workload-fitted draft
-vocabulary are not universal defaults for every Spark. The generalized installer
-has helper tests but has not been proven by a clean-machine installation in this
-repository. The release ID is changed to `78b0675-community-v1` so it cannot be
+vocabulary are not universal defaults for every Spark. The generalized installer completed a clone-to-runtime validation on one GB10
+DGX Spark on 2026-09-09; this remains one-host evidence, not universal portability. The release ID is changed to `78b0675-community-v1` so it cannot be
 mistaken for or collide with the source fork's immutable release.
 
 ### catonooka: `9d00bf6`
@@ -55,8 +54,11 @@ acceptance—should be considered when comparing benchmark numbers.
 
 The integration is checked with Bash syntax validation, Python unit tests for the
 deployment helpers and load harness, manifest verification and Git whitespace
-checks. A real DGX Spark launch, model download, privileged systemd installation,
-GPU load test and overnight soak remain hardware validation tasks.
+checks. A real GB10 DGX Spark run on 2026-09-09 completed the pinned model/image bootstrap,
+privileged systemd installation, smoke test and mixed-load test with exit status
+0. Prefix hits increased 0 to 4,992 and cold/warm TTFT measured 5.590/1.886
+seconds. An overnight soak, OS/driver matrix and future image/model revisions
+remain separate qualification tasks.
 
 ## Follow-up review: independent DGX Spark recipes
 
@@ -78,3 +80,31 @@ recipe reports that this combination can let speculative placeholder indices
 reach Qwen3.8-Flash-Next's n-gram context path and silently alter output. This is
 a correctness guard, not a performance tuning claim. Image-level changes remain
 deferred until the new validation tool establishes behavior on the target DGX.
+
+## Current follow-up decision
+
+### Do now: non-mutating evidence
+
+- Run deterministic smoke with `--repeats 20 --require-prefix-hit` when a longer
+  confidence check is useful.
+- Add storage/prefill observability for real-text 8k/32k/128k prompts: TTFT,
+  prefix hits, major faults, memory, swap and process/device read counters.
+- Record KV capacity on natural service starts so launch-to-launch variation can
+  be assessed without creating an outage solely for measurement.
+
+### Defer until evidence justifies a maintenance experiment
+
+- Sweep `long-prefill-token-threshold` only if production traffic shows harmful
+  decode gaps. It trades prefill throughput for stream responsiveness and needs
+  controlled restarts plus an A/B report.
+- Evaluate deterministic top-k, Mamba cache fixes, skinny-GEMM and MTP index
+  sharing only in a separately built, digest-pinned experimental image after a
+  failure or material bottleneck is reproduced on the current image.
+
+### Do not apply to the current Mia checkpoint profile
+
+- NVIDIA-official-checkpoint compatibility patches and the roughly 128 GiB swap
+  design solve a different model/layout problem and conflict with this profile's
+  memory policy. They belong in a separate profile with separate qualification.
+- Host-specific `.env`, generated launch files, unauthenticated non-loopback
+  binding and unbounded container restart policies remain excluded.
