@@ -9,6 +9,7 @@ The measured configuration uses the standard `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4
 - [Deployment guide](deployment/README.md): review, stage, install and roll back.
 - [Production changes and tradeoffs](PRODUCTION-NOTES.md).
 - [Full measured profile and methodology](docs/measured-profile-2026-09-07.md).
+- [Storage/prefill observer](bench/storage_prefill.py): non-mutating TTFT, fault, memory, process-I/O and physical-device counters.
 - [Community fork integration review](COMMUNITY-INTEGRATION.md): adopted and deferred commits with rationale.
 - [Upstream historical documentation](#upstream-historical-reference): retained below with its original credits and licensing.
 
