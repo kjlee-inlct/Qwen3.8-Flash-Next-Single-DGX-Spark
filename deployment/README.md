@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/03378aa-hf-token-validation-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/81b9e8f-safe-uninstaller-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -199,6 +199,25 @@ sudo /bin/bash /opt/qwen3.8-flash-next/current/deployment/rollback-root.sh
 
 Rollback requires a previous managed release and starts it; check readiness
 afterward. Historical files are retained rather than deleting models/releases.
+
+## Uninstall
+
+Run the uninstaller from a reviewed Git checkout. Its default removes the managed
+service, exact container, systemd unit, and immutable releases while preserving
+the expensive model cache, state, rollback backups, pinned image, host sysctl
+profile, and the checkout itself:
+
+```bash
+sudo bash ./uninstall-root.sh
+```
+
+The script prints its exact plan and requires typing `REMOVE`. For automation,
+add `--yes` only after reviewing that plan. Optional destructive scopes are
+independent: `--purge-state`, `--purge-backups`, `--remove-image`, and
+`--remove-sysctl-profile`; `--purge-all` selects all four. Removing the sysctl
+file does not guess the machine's former live values. Reboot or apply a separately
+reviewed host policy afterward. Use `sudo bash ./uninstall-root.sh --help` before any
+purge operation.
 
 ## Optional OS maintenance
 
