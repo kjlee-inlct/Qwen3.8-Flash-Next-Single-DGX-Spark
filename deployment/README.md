@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/1bca67c-storage-observer-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/acccc85-cache-qsa-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -262,6 +262,34 @@ The smoke test checks coherence, repeated greedy output/logprob stability, long
 prompt TTFT and the prefix-cache metric when available. The mixed test measures
 decode stream gaps while a long prefill competes with it. Neither command changes
 the server configuration.
+
+### Prefix-cache correctness and QSA determinism
+
+The ordinary smoke test proves latency and one short-prompt repetition, but that
+alone cannot exclude a wrong Mamba-state restore on a cache hit or a
+shape-dependent GB10 sparse-attention top-k variation. The stronger validator
+compares generated-answer SHA-256 values and first-token top-logprobs without
+saving generated text:
+
+```bash
+python3 bench/cache_correctness.py all \\
+  --cache-sizes 8192,32768,131072 \\
+  --qsa-sizes 0,8192,32768 \\
+  --repeats 5 --max-tokens 96 --require-prefix-hit \\
+  --output qwen38-cache-qsa-$(date -u +%Y%m%dT%H%M%SZ).json
+```
+
+Each cache case uses a unique early marker, runs a first observation and an
+immediate repeat, requires the prefix-hit metric to increase, and compares the
+full answer hash plus first-token scores.
+
+**Current pinned-image result (2026-09-09): failed.** Zero-context cases were
+stable, while long-context cache/QSA answer hashes or first-token logprobs varied.
+Do not treat the working prefix-hit counter as correctness proof. See
+[`bench/results/2026-09-09-cache-qsa-validation.json`](../bench/results/2026-09-09-cache-qsa-validation.json). QSA cases cover four instruction types
+at three context sizes. A pass is evidence for this pinned image, prompt suite
+and host; repeat after any model, image, CUDA kernel, cache-policy or scheduler
+change. A failure must be investigated before importing an external patch.
 
 ### Storage and prefill observation
 

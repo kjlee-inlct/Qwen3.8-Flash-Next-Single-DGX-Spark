@@ -80,8 +80,12 @@ The immediately portable parts are adopted as `bench/runtime_validation.py`:
 The launcher also rejects `--async-scheduling` when MTP is enabled. The reviewed
 recipe reports that this combination can let speculative placeholder indices
 reach Qwen3.8-Flash-Next's n-gram context path and silently alter output. This is
-a correctness guard, not a performance tuning claim. Image-level changes remain
-deferred until the new validation tool establishes behavior on the target DGX.
+a correctness guard, not a performance tuning claim. Image-level changes remain deferred. The first validator established short-prompt
+determinism and prefix-hit performance, but did not compare long-prefix cold/warm
+answer content. `bench/cache_correctness.py` now closes that gap with answer-hash
+and first-token-logprob equality at 8K/32K/128K, plus varied QSA prompt shapes;
+The 2026-09-09 DGX run failed: zero-context cases were stable but long-context
+answer hashes/logprobs varied, and the 8K first/cache-hit answers differed.
 
 ## Current follow-up decision
 
@@ -102,9 +106,10 @@ deferred until the new validation tool establishes behavior on the target DGX.
 - Sweep `long-prefill-token-threshold` only if production traffic shows harmful
   decode gaps. It trades prefill throughput for stream responsiveness and needs
   controlled restarts plus an A/B report.
-- Evaluate deterministic top-k, Mamba cache fixes, skinny-GEMM and MTP index
-  sharing only in a separately built, digest-pinned experimental image after a
-  failure or material bottleneck is reproduced on the current image.
+- A long-context correctness failure is now reproduced. Build a separately
+  digest-pinned experimental image with only the Mamba state-copy race and
+  prefix block-size fixes first. Add deterministic top-k only in a second A/B
+  if QSA instability remains. Skinny-GEMM and MTP index sharing stay deferred.
 
 ### Do not apply to the current Mia checkpoint profile
 
