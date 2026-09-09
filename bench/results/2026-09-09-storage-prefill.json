@@ -1,0 +1,50 @@
+{
+  "date": "2026-09-09",
+  "host": "one NVIDIA GB10 DGX Spark",
+  "model": "qwen3.8-flash-next",
+  "cache_policy": "no drop_caches; first-observed on an already-running production service",
+  "packed_ple_bytes": 28800138240,
+  "runs": [
+    {
+      "prompt_tokens": 8192,
+      "first_ttft_s": 4.324,
+      "repeat_ttft_s": 1.882,
+      "repeat_prefix_hit_tokens": 4992,
+      "first_global_major_faults": 0,
+      "repeat_global_major_faults": 1,
+      "first_nvme_read_bytes": 6512640,
+      "repeat_nvme_read_bytes": 131072,
+      "first_swapin_pages": 0,
+      "repeat_swapin_pages": 0
+    },
+    {
+      "prompt_tokens": 32768,
+      "first_ttft_s": 17.408,
+      "repeat_ttft_s": 1.841,
+      "repeat_prefix_hit_tokens": 29952,
+      "first_global_major_faults": 0,
+      "repeat_global_major_faults": 0,
+      "first_nvme_read_bytes": 339968,
+      "repeat_nvme_read_bytes": 0,
+      "first_swapin_pages": 0,
+      "repeat_swapin_pages": 0
+    },
+    {
+      "prompt_tokens": 131072,
+      "first_ttft_s": 73.824,
+      "repeat_ttft_s": 2.277,
+      "repeat_prefix_hit_tokens": 128128,
+      "first_global_major_faults": 149,
+      "repeat_global_major_faults": 0,
+      "first_nvme_read_bytes": 9031680,
+      "repeat_nvme_read_bytes": 0,
+      "first_swapin_pages": 58,
+      "repeat_swapin_pages": 0
+    }
+  ],
+  "limitations": [
+    "global VM and block counters can include unrelated host activity",
+    "process read_bytes remained zero because mmap fault I/O is not reliably charged there",
+    "first-observed is not a guaranteed cold OS page cache"
+  ]
+}
