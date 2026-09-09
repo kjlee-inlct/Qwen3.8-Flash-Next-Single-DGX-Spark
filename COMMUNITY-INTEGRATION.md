@@ -80,8 +80,11 @@ The immediately portable parts are adopted as `bench/runtime_validation.py`:
 The launcher also rejects `--async-scheduling` when MTP is enabled. The reviewed
 recipe reports that this combination can let speculative placeholder indices
 reach Qwen3.8-Flash-Next's n-gram context path and silently alter output. This is
-a correctness guard, not a performance tuning claim. Image-level changes remain
-deferred until the new validation tool establishes behavior on the target DGX.
+a correctness guard, not a performance tuning claim. Image-level changes remain deferred. The first validator established short-prompt
+determinism and prefix-hit performance, but did not compare long-prefix cold/warm
+answer content. `bench/cache_correctness.py` now closes that gap with answer-hash
+and first-token-logprob equality at 8K/32K/128K, plus varied QSA prompt shapes;
+DGX results are pending.
 
 ## Current follow-up decision
 
