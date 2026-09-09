@@ -279,6 +279,19 @@ python3 bench/storage_prefill.py \\
   --output qwen38-storage-prefill-$(date -u +%Y%m%dT%H%M%SZ).json
 ```
 
+Measured on the already-running production service without clearing caches:
+
+| Prompt | First TTFT | Immediate repeat | Prefix-hit increase | First global major faults | First NVMe reads |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 8K | 4.324 s | 1.882 s | 4,992 tokens | 0 | 6.51 MB |
+| 32K | 17.408 s | 1.841 s | 29,952 tokens | 0 | 0.34 MB |
+| 128K | 73.824 s | 2.277 s | 128,128 tokens | 149 | 9.03 MB |
+
+This warm-service observation found no material SSD paging bottleneck. Global
+VM/block counters can include unrelated activity, and process `read_bytes` does
+not reliably attribute mmap-fault I/O. Preserve the raw local report for deeper
+host diagnosis; the checked-in summary removes host paths and PIDs.
+
 Run it as the ordinary user first. Some kernels restrict another user's
 `/proc/<pid>/io`; unavailable process counters remain null/empty while global
 kernel and block-device counters are still reported. Do not use sudo merely to
