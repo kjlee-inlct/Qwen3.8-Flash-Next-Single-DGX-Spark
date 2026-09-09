@@ -24,6 +24,7 @@
 !/download.sh
 !/start.sh
 !/stop.sh
+!/clone-install-test.sh
 !/PRODUCTION-NOTES.md
 !/COMMUNITY-INTEGRATION.md
 !/source-manifest.sha256
@@ -50,6 +51,8 @@
 !/bench/mixed.py
 !/bench/qualification_load.py
 !/bench/test_qualification_load.py
+!/bench/runtime_validation.py
+!/bench/test_runtime_validation.py
 !/bench/results/2026-09-07-profile.json
 
 # --- generic production deployment (no local credentials/configuration) --

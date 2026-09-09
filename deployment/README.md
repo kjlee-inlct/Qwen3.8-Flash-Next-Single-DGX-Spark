@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/78b0675-community-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/03378aa-hf-token-validation-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -226,3 +226,54 @@ python3 deployment/manifest_release.py verify . .
 
 These cover manifest isolation/path validation and vocabulary validation, not
 the host driver, Docker runtime, full privileged installer, or production load.
+
+On a running loopback-bound backend, execute the non-destructive behavioral
+validation before considering image-level performance patches:
+
+```bash
+python3 bench/runtime_validation.py smoke
+python3 bench/runtime_validation.py mixed --prefill-tokens 32768
+```
+
+The smoke test checks coherence, repeated greedy output/logprob stability, long
+prompt TTFT and the prefix-cache metric when available. The mixed test measures
+decode stream gaps while a long prefill competes with it. Neither command changes
+the server configuration.
+
+## Clone, install, test and collect one log
+
+From an empty working directory on the DGX Spark, download the orchestration
+script and first run its non-mutating preflight:
+
+```bash
+curl -fL -o clone-install-test.sh \
+  https://raw.githubusercontent.com/kjlee-inlct/Qwen3.8-Flash-Next-Single-DGX-Spark/validate-runtime-behavior/clone-install-test.sh
+chmod +x clone-install-test.sh
+./clone-install-test.sh
+```
+
+After reviewing the preflight log, the explicit full mode clones the validation
+branch, pulls the pinned image, downloads the pinned stock checkpoint, applies
+the documented system-wide VM profile, installs the service, and runs both
+behavioral tests:
+
+```bash
+./clone-install-test.sh --full
+```
+
+Full mode uses `HF_TOKEN` when it is already exported. If it is unset, the
+script asks for an optional token with terminal echo disabled; pressing Enter
+continues anonymously. A literal token command-line option is intentionally not
+provided because command arguments can remain in shell history and process
+listings. For unattended anonymous execution, add `--no-hf-token-prompt`.
+
+The default target is `./Qwen3.8-Flash-Next-Single-DGX-Spark-validation`. Use
+`--target /absolute/path` to change it. An existing target is refused unless it
+is the expected clean checkout at the requested branch and `--reuse` is supplied.
+Full mode defaults to the complete MTP vocabulary so no private corpus is needed;
+this is functional bootstrap mode and does not reproduce the fitted-vocabulary
+performance measurement. Supply `--draft-vocab /absolute/file` or
+`--corpus-dir /absolute/directory` to install a workload-specific vocabulary.
+
+The final line prints the absolute log path. Send that single log back for review.
+The script never enables shell tracing and never prints `HF_TOKEN`.
