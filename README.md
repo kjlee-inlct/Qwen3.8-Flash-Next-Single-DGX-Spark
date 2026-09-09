@@ -76,6 +76,24 @@ A follow-up 20-repeat greedy run at 32,768 prompt tokens also kept output text a
 
 A non-mutating storage/prefill run on the same live service measured first-observed TTFT of 4.324/17.408/73.824 seconds at 8K/32K/128K and immediate-repeat TTFT of 1.882/1.841/2.277 seconds. The 128K first observation recorded 149 global major faults and 9.03 MB of physical NVMe reads; this warm-service run did not show a material SSD paging bottleneck. See [`bench/results/2026-09-09-storage-prefill.json`](bench/results/2026-09-09-storage-prefill.json).
 
+### 2026-09-09 correctness failure on the pinned image
+
+The strengthened GB10 run did **not** pass. All four zero-context QSA cases were
+stable across five repeats, but none of the four 8K or four 32K cases passed both
+answer-hash and first-token-logprob stability. All three cache cases registered
+prefix hits, yet none passed first-token-logprob equality; at 8K the first answer
+was empty while the immediate cache-hit answer contained 223 characters. This
+means the earlier hit-counter and TTFT results must not be cited as proof of
+Mamba cache-state correctness.
+
+The blazux recipe starts from the same base image digest and adds both the vLLM
+Mamba state-copy/block-size corrections and deterministic QSA top-k. Do not copy
+its complete ten-patch image wholesale. First qualify an image containing only
+the Mamba state-copy race fix plus prefix-cache block-size fix. Re-run this tool;
+only if long-context QSA cases still vary should deterministic top-k be added as
+a separate A/B. The sanitized failure is stored in
+`bench/results/2026-09-09-cache-qsa-validation.json`.
+
 ## Start here
 
 Read [deployment/README.md](deployment/README.md) before running the production installer. Review the pinned model's license and provenance, resource requirements and planned changes. Check the settings against your host; do not copy the memory numbers to a different system without measuring.
