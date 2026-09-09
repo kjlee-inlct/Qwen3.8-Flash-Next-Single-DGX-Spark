@@ -98,6 +98,8 @@ a separate A/B. The sanitized failure is stored in
 
 Read [deployment/README.md](deployment/README.md) before running the production installer. Review the pinned model's license and provenance, resource requirements and planned changes. Check the settings against your host; do not copy the memory numbers to a different system without measuring.
 
+For a Dockerized OpenWebUI that already targets `http://host.docker.internal:8000/v1`, use the managed `install-openwebui-proxy-root.sh` helper documented in [deployment/README.md](deployment/README.md). It preserves the production service's loopback-only vLLM bind; `uninstall-openwebui-proxy-root.sh` removes only the proxy, and the full uninstaller removes it as well.
+
 The upstream `download.sh` / `start.sh` workflow remains available for experimentation. The archived instructions below describe upstream defaults and measurements, not this fork's current production defaults. **Do not start the manual launcher alongside the managed service.**
 
 No model weights, fitted private corpus, credentials, gateway configuration or deployment-host identifiers are included. The fitted vocabulary is generated locally; its exact measured file is not published, so performance on a new corpus can differ.
