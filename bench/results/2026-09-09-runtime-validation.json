@@ -1,0 +1,20 @@
+{
+  "determinism": {
+    "first_logprobs_available": true,
+    "first_logprobs_stable": true,
+    "repeats": 20,
+    "text_stable": true
+  },
+  "long_prompt": {
+    "actual_tokens": 32768,
+    "cold_ttft_s": 18.809,
+    "prefix_hits_after_cold": 0.0,
+    "prefix_hits_after_warm": 29952.0,
+    "prefix_hits_before": 0.0,
+    "repeated_prefix_hit": true,
+    "requested_tokens": 32768,
+    "warm_ttft_s": 1.848
+  },
+  "mode": "smoke",
+  "model": "qwen3.8-flash-next"
+}

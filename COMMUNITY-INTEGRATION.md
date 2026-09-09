@@ -57,8 +57,10 @@ deployment helpers and load harness, manifest verification and Git whitespace
 checks. A real GB10 DGX Spark run on 2026-09-09 completed the pinned model/image bootstrap,
 privileged systemd installation, smoke test and mixed-load test with exit status
 0. Prefix hits increased 0 to 4,992 and cold/warm TTFT measured 5.590/1.886
-seconds. An overnight soak, OS/driver matrix and future image/model revisions
-remain separate qualification tasks.
+seconds. A subsequent 20-repeat greedy test at 32K kept text and first-token top-logprobs
+stable; prefix hits increased 0 to 29,952 and TTFT measured 18.809 seconds cold
+versus 1.848 seconds warm. An overnight soak, OS/driver matrix and future
+image/model revisions remain separate qualification tasks.
 
 ## Follow-up review: independent DGX Spark recipes
 
@@ -85,8 +87,8 @@ deferred until the new validation tool establishes behavior on the target DGX.
 
 ### Do now: non-mutating evidence
 
-- Run deterministic smoke with `--repeats 20 --require-prefix-hit` when a longer
-  confidence check is useful.
+- The 20-repeat deterministic smoke and required-prefix-hit check completed on
+  2026-09-09. Repeat it after any image, model, kernel or cache-policy change.
 - Add storage/prefill observability for real-text 8k/32k/128k prompts: TTFT,
   prefix hits, major faults, memory, swap and process/device read counters.
 - Record KV capacity on natural service starts so launch-to-launch variation can

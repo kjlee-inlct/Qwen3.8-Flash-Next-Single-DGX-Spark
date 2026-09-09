@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/b16e6c8-dgx-validation-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/dc5a37e-determinism20-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -246,7 +246,9 @@ python3 deployment/manifest_release.py verify . .
 These cover manifest isolation/path validation and vocabulary validation. A
 2026-09-09 GB10 run additionally covered the pinned download, host profile,
 privileged systemd install, smoke test and mixed load; future dependency or host
-changes still require requalification.
+changes still require requalification. A subsequent 20-repeat 32K smoke run
+kept greedy text and first-token logprobs stable, increased prefix hits by
+29,952 tokens, and measured 18.809/1.848-second cold/warm TTFT.
 
 On a running loopback-bound backend, execute the non-destructive behavioral
 validation before considering image-level performance patches:
