@@ -281,7 +281,12 @@ python3 bench/cache_correctness.py all \\
 
 Each cache case uses a unique early marker, runs a first observation and an
 immediate repeat, requires the prefix-hit metric to increase, and compares the
-full answer hash plus first-token scores. QSA cases cover four instruction types
+full answer hash plus first-token scores.
+
+**Current pinned-image result (2026-09-09): failed.** Zero-context cases were
+stable, while long-context cache/QSA answer hashes or first-token logprobs varied.
+Do not treat the working prefix-hit counter as correctness proof. See
+[`bench/results/2026-09-09-cache-qsa-validation.json`](../bench/results/2026-09-09-cache-qsa-validation.json). QSA cases cover four instruction types
 at three context sizes. A pass is evidence for this pinned image, prompt suite
 and host; repeat after any model, image, CUDA kernel, cache-policy or scheduler
 change. A failure must be investigated before importing an external patch.
