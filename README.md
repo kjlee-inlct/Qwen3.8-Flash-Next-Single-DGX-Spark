@@ -70,6 +70,8 @@ increased prefix-cache hits from 0 to 4,992 tokens; measured TTFT fell from
 5.590 seconds cold to 1.886 seconds warm. These results validate this exact
 host/run, not every DGX OS version or future image/model revision.
 
+A follow-up 20-repeat greedy run at 32,768 prompt tokens also kept output text and first-token top-logprobs stable. Prefix hits increased from 0 to 29,952 tokens and TTFT measured 18.809 seconds cold versus 1.848 seconds warm; see [`bench/results/2026-09-09-runtime-validation.json`](bench/results/2026-09-09-runtime-validation.json).
+
 ## Start here
 
 Read [deployment/README.md](deployment/README.md) before running the production installer. Review the pinned model's license and provenance, resource requirements and planned changes. Check the settings against your host; do not copy the memory numbers to a different system without measuring.
