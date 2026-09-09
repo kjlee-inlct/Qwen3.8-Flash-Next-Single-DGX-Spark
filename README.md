@@ -100,6 +100,8 @@ Read [deployment/README.md](deployment/README.md) before running the production 
 
 For a Dockerized OpenWebUI that already targets `http://host.docker.internal:8000/v1`, use the managed `install-openwebui-proxy-root.sh` helper documented in [deployment/README.md](deployment/README.md). It preserves the production service's loopback-only vLLM bind; `uninstall-openwebui-proxy-root.sh` removes only the proxy, and the full uninstaller removes it as well.
 
+The first image-level correctness A/B is isolated under [`experiments/mamba-prefix`](experiments/mamba-prefix/README.md). It does not alter the production image or add QSA/performance patches, and its outage runner restores the pinned service after collecting the sanitized cache/QSA report.
+
 The upstream `download.sh` / `start.sh` workflow remains available for experimentation. The archived instructions below describe upstream defaults and measurements, not this fork's current production defaults. **Do not start the manual launcher alongside the managed service.**
 
 No model weights, fitted private corpus, credentials, gateway configuration or deployment-host identifiers are included. The fitted vocabulary is generated locally; its exact measured file is not published, so performance on a new corpus can differ.
