@@ -3,9 +3,9 @@
 This optional deployment layer packages the measured profile as an immutable
 release with memory admission checks, readiness checks, bounded restart attempts,
 and rollback. It is independent of any particular laptop, user account, reverse
-proxy, or VPN. The optimized production profile has been exercised on one DGX
-Spark; this generalized public installer has syntax/helper tests, **not a fresh
-machine end-to-end installation test**.
+proxy, or VPN. The optimized production profile and the generalized public installer were
+exercised end to end on one NVIDIA GB10 DGX Spark on 2026-09-09. This is one-host
+evidence, not portability proof for every DGX OS, driver, image, or model revision.
 
 ## Before running privileged code
 
@@ -142,7 +142,7 @@ table and warming the GPU. Installer readiness allows approximately 30 minutes.
 
 | Item | Location / behavior |
 | --- | --- |
-| Immutable source release | `/opt/qwen3.8-flash-next/releases/81b9e8f-safe-uninstaller-v1` |
+| Immutable source release | `/opt/qwen3.8-flash-next/releases/b16e6c8-dgx-validation-v1` |
 | Active link | `/opt/qwen3.8-flash-next/current` |
 | Model/cache/PLE state | `/var/lib/qwen3.8-flash-next` |
 | Vocabulary | `/var/lib/qwen3.8-flash-next/draft_vocab/qwen38fn_local_code_65k.txt` |
@@ -243,8 +243,10 @@ python3 -m unittest discover -s bench -p 'test_*.py' -v
 python3 deployment/manifest_release.py verify . .
 ```
 
-These cover manifest isolation/path validation and vocabulary validation, not
-the host driver, Docker runtime, full privileged installer, or production load.
+These cover manifest isolation/path validation and vocabulary validation. A
+2026-09-09 GB10 run additionally covered the pinned download, host profile,
+privileged systemd install, smoke test and mixed load; future dependency or host
+changes still require requalification.
 
 On a running loopback-bound backend, execute the non-destructive behavioral
 validation before considering image-level performance patches:
@@ -266,7 +268,7 @@ script and first run its non-mutating preflight:
 
 ```bash
 curl -fL -o clone-install-test.sh \
-  https://raw.githubusercontent.com/kjlee-inlct/Qwen3.8-Flash-Next-Single-DGX-Spark/validate-runtime-behavior/clone-install-test.sh
+  https://raw.githubusercontent.com/kjlee-inlct/Qwen3.8-Flash-Next-Single-DGX-Spark/main/clone-install-test.sh
 chmod +x clone-install-test.sh
 ./clone-install-test.sh
 ```
@@ -286,7 +288,7 @@ continues anonymously. A literal token command-line option is intentionally not
 provided because command arguments can remain in shell history and process
 listings. For unattended anonymous execution, add `--no-hf-token-prompt`.
 
-The default target is `./Qwen3.8-Flash-Next-Single-DGX-Spark-validation`. Use
+The default target is `./Qwen3.8-Flash-Next-Single-DGX-Spark`. Use
 `--target /absolute/path` to change it. An existing target is refused unless it
 is the expected clean checkout at the requested branch and `--reuse` is supplied.
 Full mode defaults to the complete MTP vocabulary so no private corpus is needed;
