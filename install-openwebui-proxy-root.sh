@@ -132,6 +132,7 @@ ProtectHome=true
 NoNewPrivileges=true
 EOF
 
+systemctl stop "$SOCKET_UNIT" "$SERVICE_UNIT" 2>/dev/null || true
 install -o root -g root -m 0644 "$tmp_dir/$SOCKET_UNIT" "$SOCKET_FILE"
 install -o root -g root -m 0644 "$tmp_dir/$SERVICE_UNIT" "$SERVICE_FILE"
 systemctl daemon-reload
