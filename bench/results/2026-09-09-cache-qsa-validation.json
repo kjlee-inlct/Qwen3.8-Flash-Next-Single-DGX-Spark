@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-09",
+  "host": "one NVIDIA GB10 DGX Spark",
+  "base_image_digest": "sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8",
+  "model": "qwen3.8-flash-next",
+  "passed": false,
+  "cache": {
+    "passed_cases": 0,
+    "total_cases": 3,
+    "sizes": [8192, 32768, 131072],
+    "prefix_hit_increased_all_cases": true,
+    "text_equal": [false, true, true],
+    "first_logprobs_equal": [false, false, false],
+    "notable_observation": "At 8K the first answer was empty while the cache-hit answer contained 223 characters."
+  },
+  "qsa": {
+    "repeats_per_case": 5,
+    "instruction_types": 4,
+    "zero_context_passed_cases": 4,
+    "zero_context_total_cases": 4,
+    "8192_context_passed_cases": 0,
+    "8192_context_total_cases": 4,
+    "32768_context_passed_cases": 0,
+    "32768_context_total_cases": 4
+  },
+  "interpretation": [
+    "short zero-context greedy generation was stable",
+    "long-context output hashes and first-token logprobs were unstable",
+    "prefix hit performance alone did not establish cache-state correctness",
+    "isolate the Mamba state-copy and prefix block-size fixes before adding deterministic top-k"
+  ],
+  "generated_text_retained": false
+}
