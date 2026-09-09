@@ -202,11 +202,14 @@ echo
 echo "===== STATIC VALIDATION ====="
 python3 -m unittest discover -s deployment/tests -v
 python3 -m unittest discover -s bench -p 'test_*.py' -v
-python3 -m py_compile bench/runtime_validation.py bench/storage_prefill.py \
+python3 -m py_compile experiments/mamba-prefix/patch_mamba_align_split.py \
+    experiments/mamba-prefix/mamba_utils_guarded.py \
+    bench/runtime_validation.py bench/storage_prefill.py \
     bench/cache_correctness.py bench/test_runtime_validation.py \
     bench/test_storage_prefill.py bench/test_cache_correctness.py
 bash -n start.sh download.sh stop.sh uninstall-root.sh install-openwebui-proxy-root.sh \
-    uninstall-openwebui-proxy-root.sh files/memwatch.sh deployment/*.sh clone-install-test.sh
+    uninstall-openwebui-proxy-root.sh experiments/mamba-prefix/*.sh \
+    files/memwatch.sh deployment/*.sh clone-install-test.sh
 python3 deployment/manifest_release.py verify . .
 git diff --check
 
