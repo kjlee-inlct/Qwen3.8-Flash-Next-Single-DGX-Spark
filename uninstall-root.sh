@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Safely remove the managed Qwen3.8 service. Large caches and host-wide tuning
 # are preserved unless their explicit options are selected.
-[[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "Run with sudo: sudo ./uninstall-root.sh" >&2; exit 1; }
+[[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "Run with sudo: sudo bash ./uninstall-root.sh" >&2; exit 1; }
 
 INSTALL_BASE="/opt/qwen3.8-flash-next"
 STATE_DIR="/var/lib/qwen3.8-flash-next"
@@ -22,7 +22,7 @@ ASSUME_YES=false
 
 usage() {
     cat <<'EOF'
-Usage: sudo ./uninstall-root.sh [options]
+Usage: sudo bash ./uninstall-root.sh [options]
 
 Default removal:
   - stop and disable qwen3.8-flash-next.service
