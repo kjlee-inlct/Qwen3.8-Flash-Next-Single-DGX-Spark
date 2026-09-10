@@ -56,12 +56,31 @@ def make_prompt(
         prompt = prefix + instruction
         return prompt, runtime.tokenize_count(base, model, prompt)
     source = runtime.corpus_text(corpus, max(50_000, target_tokens * 8))
-    low, high = 1, len(source)
-    best = prefix + source + "\n\n" + instruction
+    suffix = "\n\n" + instruction
+    best = prefix + suffix
     best_count = runtime.tokenize_count(base, model, best)
-    for _ in range(20):
+
+    # Grow the searched character window gradually. Tokenizing the complete
+    # repeated corpus first can exceed max_model_len even when the requested
+    # final prompt is safe (for example, a 131K target produced a 342K probe).
+    low_chars = 0
+    high_chars = min(len(source), max(4096, target_tokens))
+    while True:
+        candidate = prefix + source[:high_chars] + suffix
+        count = runtime.tokenize_count(base, model, candidate)
+        if abs(count - target_tokens) < abs(best_count - target_tokens):
+            best, best_count = candidate, count
+        if count >= target_tokens or high_chars == len(source):
+            break
+        low_chars = high_chars
+        high_chars = min(len(source), high_chars + max(4096, high_chars // 2))
+
+    low, high = low_chars, high_chars
+    for _ in range(24):
+        if low > high:
+            break
         middle = (low + high) // 2
-        candidate = prefix + source[:middle] + "\n\n" + instruction
+        candidate = prefix + source[:middle] + suffix
         count = runtime.tokenize_count(base, model, candidate)
         if abs(count - target_tokens) < abs(best_count - target_tokens):
             best, best_count = candidate, count
@@ -72,7 +91,7 @@ def make_prompt(
     return best, best_count
 
 
-def completion(base: str, model: str, prompt: str, max_tokens: int) -> dict:
+def completion(base: str, model: str, prompt: str, max_tokens: int, min_tokens: int) -> dict:
     """Run one greedy completion and retain text only until its hash is computed."""
     response = runtime.request_json(
         base,
@@ -81,6 +100,7 @@ def completion(base: str, model: str, prompt: str, max_tokens: int) -> dict:
             "model": model,
             "prompt": prompt,
             "max_tokens": max_tokens,
+            "min_tokens": min_tokens,
             "temperature": 0,
             "logprobs": 5,
         },
@@ -89,11 +109,18 @@ def completion(base: str, model: str, prompt: str, max_tokens: int) -> dict:
     choice = response["choices"][0]
     text = choice.get("text", "")
     scores = runtime.first_logprobs(choice)
+    tokens = (choice.get("logprobs") or {}).get("tokens") or []
+    token_fingerprint = answer_hash(
+        json.dumps(tokens, ensure_ascii=False, separators=(",", ":"))
+    )
     return {
         "hash": answer_hash(text),
         "chars": len(text),
         "finish_reason": choice.get("finish_reason"),
         "scores": scores,
+        "token_count": len(tokens),
+        "token_fingerprint": token_fingerprint,
+        "valid": bool(text.strip()) and len(tokens) >= min_tokens,
     }
 
 
@@ -104,12 +131,19 @@ def public_sample(sample: dict) -> dict:
         "answer_chars": sample["chars"],
         "finish_reason": sample["finish_reason"],
         "first_logprobs_available": bool(sample["scores"]),
+        "generated_tokens": sample["token_count"],
+        "generated_token_sha256": sample["token_fingerprint"],
+        "valid_sample": sample["valid"],
     }
 
 
-def samples_match(left: dict, right: dict) -> tuple[bool, bool]:
-    """Return exact-text-hash and first-token-score equality decisions."""
-    return left["hash"] == right["hash"], runtime.scores_equal(left["scores"], right["scores"])
+def samples_match(left: dict, right: dict) -> tuple[bool, bool, bool]:
+    """Return text, generated-token and first-token-score equality decisions."""
+    return (
+        left["hash"] == right["hash"],
+        left["token_fingerprint"] == right["token_fingerprint"],
+        runtime.scores_equal(left["scores"], right["scores"]),
+    )
 
 
 def cache_case(args: argparse.Namespace, target: int) -> dict:
@@ -119,11 +153,12 @@ def cache_case(args: argparse.Namespace, target: int) -> dict:
         args.base_url, args.model, args.corpus, target, INSTRUCTIONS["extract"], marker
     )
     hits_before = runtime.prefix_hits(args.base_url)
-    first = completion(args.base_url, args.model, prompt, args.max_tokens)
+    first = completion(args.base_url, args.model, prompt, args.max_tokens, args.min_tokens)
     hits_after_first = runtime.prefix_hits(args.base_url)
-    repeated = completion(args.base_url, args.model, prompt, args.max_tokens)
+    repeated = completion(args.base_url, args.model, prompt, args.max_tokens, args.min_tokens)
     hits_after_repeat = runtime.prefix_hits(args.base_url)
-    text_equal, scores_equal = samples_match(first, repeated)
+    text_equal, tokens_equal, scores_equal = samples_match(first, repeated)
+    valid_samples = first["valid"] and repeated["valid"]
     hit = None if hits_after_first is None or hits_after_repeat is None else hits_after_repeat > hits_after_first
     return {
         "requested_tokens": target,
@@ -131,12 +166,15 @@ def cache_case(args: argparse.Namespace, target: int) -> dict:
         "first": public_sample(first),
         "repeat": public_sample(repeated),
         "text_equal": text_equal,
+        "generated_tokens_equal": tokens_equal,
         "first_logprobs_equal": scores_equal,
+        "valid_samples": valid_samples,
         "prefix_hits_before": hits_before,
         "prefix_hits_after_first": hits_after_first,
         "prefix_hits_after_repeat": hits_after_repeat,
         "repeated_prefix_hit": hit,
-        "passed": text_equal and scores_equal and (hit is True or not args.require_prefix_hit),
+        "passed": valid_samples and text_equal and tokens_equal and scores_equal
+        and (hit is True or not args.require_prefix_hit),
     }
 
 
@@ -144,8 +182,13 @@ def qsa_case(args: argparse.Namespace, target: int, name: str, instruction: str)
     """Repeat one prompt across a QSA-relevant shape and detect any variation."""
     marker = secrets.token_hex(16)
     prompt, actual = make_prompt(args.base_url, args.model, args.corpus, target, instruction, marker)
-    samples = [completion(args.base_url, args.model, prompt, args.max_tokens) for _ in range(args.repeats)]
+    samples = [completion(args.base_url, args.model, prompt, args.max_tokens, args.min_tokens) for _ in range(args.repeats)]
+    valid_samples = all(sample["valid"] for sample in samples)
     text_stable = all(sample["hash"] == samples[0]["hash"] for sample in samples[1:])
+    token_stable = all(
+        sample["token_fingerprint"] == samples[0]["token_fingerprint"]
+        for sample in samples[1:]
+    )
     score_stable = all(runtime.scores_equal(samples[0]["scores"], sample["scores"]) for sample in samples[1:])
     return {
         "name": name,
@@ -154,9 +197,12 @@ def qsa_case(args: argparse.Namespace, target: int, name: str, instruction: str)
         "repeats": args.repeats,
         "unique_answer_hashes": sorted({sample["hash"] for sample in samples}),
         "first_logprobs_available": bool(samples[0]["scores"]),
+        "generated_token_counts": [sample["token_count"] for sample in samples],
+        "valid_samples": valid_samples,
         "text_stable": text_stable,
+        "generated_tokens_stable": token_stable,
         "first_logprobs_stable": score_stable,
-        "passed": text_stable and score_stable,
+        "passed": valid_samples and text_stable and token_stable and score_stable,
     }
 
 
@@ -170,6 +216,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--qsa-sizes", type=parse_sizes, default=parse_sizes("0,8192,32768"))
     result.add_argument("--repeats", type=int, default=5)
     result.add_argument("--max-tokens", type=int, default=96)
+    result.add_argument("--min-tokens", type=int, default=8)
     result.add_argument("--require-prefix-hit", action="store_true")
     result.add_argument("--output", type=pathlib.Path)
     return result
@@ -187,6 +234,8 @@ def main() -> None:
         parser().error("--repeats must be between 2 and 20")
     if not 16 <= args.max_tokens <= 512:
         parser().error("--max-tokens must be between 16 and 512")
+    if not 1 <= args.min_tokens < args.max_tokens:
+        parser().error("--min-tokens must be at least 1 and less than --max-tokens")
     runtime.check_backend(args.base_url, args.model)
 
     report = {
