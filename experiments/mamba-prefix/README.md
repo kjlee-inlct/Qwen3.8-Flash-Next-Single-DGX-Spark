@@ -57,3 +57,20 @@ Pass criteria:
 If cache correctness passes but long-context QSA still fails, stop this
 experiment and create a second image containing deterministic top-k. Do not add
 that patch here.
+
+## First GB10 observation (2026-09-10)
+
+The Mamba-only image started successfully, exercised align-mode Mamba caching,
+completed the cache/QSA suite, and restored the pinned production service.
+Prefix-hit counters increased, but the report failed every long-context
+correctness case. Most long-context completions contained zero answer
+characters, so that run does not isolate a Mamba defect from immediate-EOS test
+artifacts or QSA nondeterminism. The image therefore remains experimental and
+must not be promoted.
+
+The validator now sends `min_tokens`, rejects empty/short samples, compares a
+sanitized generated-token fingerprint in addition to text/logprobs, and grows
+its tokenization search window incrementally. This avoids treating identical
+empty answers as evidence and prevents the previous 342K-token sizing probe
+against a 262K model limit. Re-run both the pinned baseline and this image with
+the strengthened validator before considering deterministic top-k.
