@@ -61,6 +61,14 @@ The runner refuses to start without a healthy production baseline, enables
 sanitized report and container log under `/var/tmp`, and restores the pinned
 production service.
 
+The production launcher normally bind-mounts its generated FP8-QSA
+compatibility file over the image's `qsa.py`. To prevent that mount from
+hiding this experiment, the runner copies the current release into a private
+`/var/tmp/qwen38-qsa-exact-stage.*` directory, generates the launch without
+starting it, applies the same exact-top-k patch to the staged mount source, and
+then launches it. The immutable production release is never edited, and the
+validated staging directory is removed before production restoration.
+
 Pass criteria:
 
 - cache 8K/32K/131K: valid samples, prefix hit, equal text/token fingerprints,
