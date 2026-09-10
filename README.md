@@ -86,12 +86,15 @@ was empty while the immediate cache-hit answer contained 223 characters. This
 means the earlier hit-counter and TTFT results must not be cited as proof of
 Mamba cache-state correctness.
 
-The blazux recipe starts from the same base image digest and adds both the vLLM
-Mamba state-copy/block-size corrections and deterministic QSA top-k. Do not copy
-its complete ten-patch image wholesale. First qualify an image containing only
-the Mamba state-copy race fix plus prefix-cache block-size fix. Re-run this tool;
-only if long-context QSA cases still vary should deterministic top-k be added as
-a separate A/B. The sanitized failure is stored in
+The strengthened 2026-09-10 baseline removed the empty-answer ambiguity:
+every sample was valid and non-empty, while cache correctness still failed at
+8K/32K/131K and QSA remained stable only at zero context. An isolated Mamba
+state-copy/block-size image reproduced the same boundary and was not promoted.
+The next isolated probe is [exact QSA top-k](experiments/qsa-exact-topk/README.md):
+it changes only the opt-in selector, deliberately accepts a possible prefill
+penalty, and must restore the pinned production service after testing. The
+faster standalone CUDA selector remains deferred until this correctness probe
+establishes causality. The original sanitized failure is stored in
 `bench/results/2026-09-09-cache-qsa-validation.json`.
 
 ## Start here

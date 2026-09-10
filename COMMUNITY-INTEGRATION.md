@@ -106,10 +106,14 @@ answer hashes/logprobs varied, and the 8K first/cache-hit answers differed.
 - Sweep `long-prefill-token-threshold` only if production traffic shows harmful
   decode gaps. It trades prefill throughput for stream responsiveness and needs
   controlled restarts plus an A/B report.
-- A long-context correctness failure is now reproduced. Build a separately
-  digest-pinned experimental image with only the Mamba state-copy race and
-  prefix block-size fixes first. Add deterministic top-k only in a second A/B
-  if QSA instability remains. Skinny-GEMM and MTP index sharing stay deferred.
+- The strengthened baseline confirmed valid non-empty but unstable generations
+  at 8K/32K and cache mismatches at 8K/32K/131K. The Mamba-only image reproduced
+  the same pass/fail boundary and its PR was closed without merge. The isolated
+  `experiments/qsa-exact-topk` image now tests only blazux's opt-in exact
+  `torch.topk` selector. It is a correctness probe with an expected prefill
+  cost, not a production recommendation. Evaluate the separately pinned fast
+  CUDA selector only if this probe establishes causality. Skinny-GEMM and MTP
+  index sharing stay deferred.
 
 ### Do not apply to the current Mia checkpoint profile
 
