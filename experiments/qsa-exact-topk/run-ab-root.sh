@@ -14,6 +14,7 @@ IMAGE="qwen38-flash-next:qsa-exact-topk-ab"
 REPORT="/var/tmp/qwen38-qsa-exact-topk-ab-$(date -u +%Y%m%dT%H%M%SZ).json"
 LOG="${REPORT%.json}.container.log"
 RESTORE_NEEDED=0
+STAGE=""
 
 CURRENT_REAL="$(readlink -f "$CURRENT" 2>/dev/null || true)"
 [[ "$CURRENT_REAL" == /opt/qwen3.8-flash-next/releases/* && -d "$CURRENT_REAL" && ! -L "$CURRENT_REAL" ]] || {
@@ -49,6 +50,9 @@ restore_production() {
         fi
         /bin/bash "$CURRENT_REAL/stop.sh" >/dev/null 2>&1 || \
             docker rm -f "$CONTAINER" >/dev/null 2>&1
+        if [[ "$STAGE" == /var/tmp/qwen38-qsa-exact-stage.* && -d "$STAGE" ]]; then
+            rm -rf -- "$STAGE"
+        fi
         systemctl reset-failed "$SERVICE" >/dev/null 2>&1
         systemctl start "$SERVICE" || restore_status=1
         if [[ "$restore_status" -eq 0 ]]; then
@@ -86,13 +90,24 @@ echo "experimental_image=$(docker image inspect --format '{{.Id}}' "$IMAGE")"
 systemctl stop "$SERVICE"
 RESTORE_NEEDED=1
 
-cd "$CURRENT_REAL"
+STAGE="$(mktemp -d /var/tmp/qwen38-qsa-exact-stage.XXXXXX)"
+cp -a "$CURRENT_REAL/." "$STAGE/"
+cd "$STAGE"
 HOME=/var/lib/qwen3.8-flash-next \
 HF_HOME=/var/lib/qwen3.8-flash-next/huggingface \
 IMAGE="$IMAGE" \
 ALLOW_IMAGE_PULL=0 \
 EXTRA_DOCKER_ARGS="-e VLLM_QSA_EXACT_TOPK=1" \
-/bin/bash ./start.sh
+/bin/bash ./start.sh --no-launch
+
+# start.sh deliberately bind-mounts its locally generated FP8-QSA compatibility
+# file over the same qsa.py path. Patch the private staged mount source so the
+# image experiment is not hidden, while leaving the immutable production
+# release untouched.
+python3 "$REPO_ROOT/experiments/qsa-exact-topk/patch_qsa_exact_topk.py" \
+  "$STAGE/files/qsa_ops_patched.py"
+grep -q 'VLLM_QSA_EXACT_TOPK' "$STAGE/files/qsa_ops_patched.py"
+/bin/bash "$STAGE/.last_launch.sh"
 
 for _ in $(seq 1 180); do
     curl -fsS http://127.0.0.1:8888/health >/dev/null 2>&1 && break
