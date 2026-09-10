@@ -43,6 +43,12 @@ class QsaExactTopkExperimentTests(unittest.TestCase):
         self.assertIn("trap restore_production EXIT INT TERM", runner)
         self.assertIn("RUN-QSA-EXACT-TOPK-AB", runner)
         self.assertIn("--min-tokens 8", runner)
+        self.assertIn("./start.sh --no-launch", runner)
+        self.assertIn('"$STAGE/files/qsa_ops_patched.py"', runner)
+        self.assertIn(
+            'STAGE" == /var/tmp/qwen38-qsa-exact-stage.*',
+            runner,
+        )
 
 
 if __name__ == "__main__":
