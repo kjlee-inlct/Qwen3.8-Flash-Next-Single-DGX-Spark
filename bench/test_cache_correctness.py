@@ -25,15 +25,23 @@ class CacheCorrectnessTests(unittest.TestCase):
         left = {"hash": "a", "scores": {"token": -0.25}}
         same = {"hash": "a", "scores": {"token": -0.2500001}}
         changed = {"hash": "b", "scores": {"other": -0.25}}
-        self.assertEqual(validation.samples_match(left, same), (True, True))
-        self.assertEqual(validation.samples_match(left, changed), (False, False))
+        left.update(token_fingerprint="tokens")
+        same.update(token_fingerprint="tokens")
+        changed.update(token_fingerprint="changed")
+        self.assertEqual(validation.samples_match(left, same), (True, True, True))
+        self.assertEqual(validation.samples_match(left, changed), (False, False, False))
 
     def test_cache_case_requires_correctness_and_hit(self):
         args = argparse.Namespace(
             base_url="http://127.0.0.1:8888", model="model",
-            corpus=pathlib.Path("unused"), max_tokens=32, require_prefix_hit=True,
+            corpus=pathlib.Path("unused"), max_tokens=32, min_tokens=8,
+            require_prefix_hit=True,
         )
-        first = {"hash": "same", "chars": 4, "finish_reason": "stop", "scores": {"x": -0.1}}
+        first = {
+            "hash": "same", "chars": 4, "finish_reason": "stop",
+            "scores": {"x": -0.1}, "token_count": 8,
+            "token_fingerprint": "tokens", "valid": True,
+        }
         with mock.patch.object(validation, "make_prompt", return_value=("prompt", 8192)), \
              mock.patch.object(validation, "completion", side_effect=[first, dict(first)]), \
              mock.patch.object(validation.runtime, "prefix_hits", side_effect=[10.0, 10.0, 100.0]):
@@ -42,6 +50,26 @@ class CacheCorrectnessTests(unittest.TestCase):
         self.assertTrue(result["text_equal"])
         self.assertTrue(result["first_logprobs_equal"])
         self.assertTrue(result["repeated_prefix_hit"])
+        self.assertTrue(result["valid_samples"])
+        self.assertTrue(result["generated_tokens_equal"])
+
+    def test_empty_samples_are_never_valid(self):
+        args = argparse.Namespace(
+            base_url="http://127.0.0.1:8888", model="model",
+            corpus=pathlib.Path("unused"), max_tokens=32, min_tokens=8,
+            require_prefix_hit=False,
+        )
+        empty = {
+            "hash": validation.answer_hash(""), "chars": 0,
+            "finish_reason": "stop", "scores": {"x": -0.1},
+            "token_count": 8, "token_fingerprint": "tokens", "valid": False,
+        }
+        with mock.patch.object(validation, "make_prompt", return_value=("prompt", 8192)), \
+             mock.patch.object(validation, "completion", side_effect=[empty, dict(empty)]), \
+             mock.patch.object(validation.runtime, "prefix_hits", return_value=None):
+            result = validation.cache_case(args, 8192)
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["valid_samples"])
 
 
 if __name__ == "__main__":
