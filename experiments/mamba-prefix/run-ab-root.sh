@@ -117,6 +117,7 @@ python3 bench/cache_correctness.py all \
   --qsa-sizes 0,8192,32768 \
   --repeats 5 \
   --max-tokens 96 \
+  --min-tokens 8 \
   --require-prefix-hit \
   --output "$REPORT"
 chmod 0600 "$REPORT"
